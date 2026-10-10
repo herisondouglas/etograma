@@ -37,6 +37,9 @@ const IC={
 const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
 
 /* ================= dados padrão ================= */
+// Divisão das dietas no curral da faculdade, baias 1–12 (A = azul, dieta 40%; V = vermelho, dieta 80%). Da baia 13 em diante repete.
+const ORDEM_CURRAL="AVVAAVVAVAAV";
+const ladoCurral=i=>ORDEM_CURRAL[(i-1)%ORDEM_CURRAL.length];
 function B(nome,tipo){return{id:uid(),nome,tipo:tipo||"comum"}}
 function defaultSpecies(){return[
   {id:"vaca",nome:"Vaca",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
@@ -52,7 +55,7 @@ function exampleData(species){
   const today=new Date();today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-56);
   // gA = dieta 80% (mais concentrado: come menos tempo, rumina menos, ganha mais); gB = dieta 40%
   const gA={id:"gA",nome:"Dieta 80%",dieta:"80% de concentrado",gmdMeta:1.4,cor:"vermelho"},gB={id:"gB",nome:"Dieta 40%",dieta:"40% de concentrado",gmdMeta:1.0,cor:"azul"};
-  const animais=[];for(let i=1;i<=12;i++){const n=new Date(today);n.setMonth(n.getMonth()-(22+i%4));animais.push({id:"a"+i,baia:String(i),brinco:String(4100+i*13),grupoId:i%2?"gA":"gB",raca:"Nelore",sexo:"Macho",nascimento:isoDay(n)})}
+  const animais=[];for(let i=1;i<=12;i++){const n=new Date(today);n.setMonth(n.getMonth()-(22+i%4));animais.push({id:"a"+i,baia:String(i),brinco:String(4100+i*13),grupoId:ladoCurral(i)==="V"?"gA":"gB",raca:"Nelore",sexo:"Macho",nascimento:isoDay(n)})}
   const truth={};
   animais.forEach(a=>{const A=a.grupoId==="gA";
     const eat=(A?215:265)+gauss(r)*22,rum=(A?395:505)+gauss(r)*35;
@@ -62,7 +65,7 @@ function exampleData(species){
   const dates=[0,28,56].map(d=>{const x=new Date(start);x.setDate(x.getDate()+d);return isoDay(x)});
   const pesagens=dates.map((d,k)=>({id:uid(),data:d,pesos:Object.fromEntries(animais.map(a=>{const t=truth[a.id];return[a.id,Math.round((t.p0+t.gmd*k*28+gauss(r)*2.5)*2)/2]}))}));
   const consumo=dates.slice(1).map(d=>({id:uid(),data:d,valores:Object.fromEntries(animais.map(a=>[a.id,Math.round((truth[a.id].cms+gauss(r)*.25)*10)/10]))}));
-  const exp={id:"exemplo",exemplo:true,exemploV:3,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
+  const exp={id:"exemplo",exemplo:true,exemploV:4,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
   // etograma 24 h, 6 observadores × 2 animais
   const sessStart=new Date(start);sessStart.setDate(sessStart.getDate()+50);sessStart.setHours(7,0,0,0);
   const comp=sp.comp.map(c=>({...c}));const id=n=>comp.find(c=>c.nome.startsWith(n))?.id;
@@ -104,7 +107,7 @@ function load(){
 // Exemplo de versões anteriores é trocado pelo atual (baias 1–12, dieta 40% × 80%, cadastro completo dos animais).
 function addNewSpecies(d){if((d.speciesV||1)<2){if(!d.species.some(s=>s.id==="porco"||norm(s.nome)==="porco"))d.species.push(defaultSpecies().find(s=>s.id==="porco"));d.speciesV=2}return d}
 function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="exemplo");
-  if(!old||old.exemploV===3)return d;
+  if(!old||old.exemploV===4)return d;
   try{const ex=exampleData(d.species.some(s=>s.id==="vaca")?d.species:defaultSpecies());
     d.experiments=d.experiments.map(x=>x===old?ex.exp:x);d.sessions=[...d.sessions.filter(s=>!s.exemplo),...ex.sessions];
     localStorage.setItem(KEY,JSON.stringify(d))}catch(e){} // se falhar, segue com o exemplo antigo; nunca perde dados reais
@@ -362,7 +365,7 @@ VIEWS.expForm=function(){
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
         <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
         ${ed?"":`<label class="f" data-nb>Quantas baias <span class="hint">um animal por baia; dá para adicionar mais depois</span><input type="number" id="xNB" value="12" min="0" max="500" inputmode="numeric"></label>
-        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
+        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral (azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12)</option><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
       </div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
@@ -395,8 +398,10 @@ VIEWS.expForm=function(){
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
     else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
       // já cria Baia 1…N (um animal por baia), divididas entre as dietas; tudo pode ser corrigido na aba Animais
-      const nb=data.rotulo==="Baia"?Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0))):0,seq=$("#xDiv",app)?.value==="seq";
-      for(let i=1;i<=nb;i++){const gi=seq?Math.min(G.length-1,Math.floor((i-1)*G.length/nb)):(i-1)%G.length;x.animais.push({id:uid(),baia:String(i),brinco:"",grupoId:G[gi].id})}
+      const nb=data.rotulo==="Baia"?Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0))):0,div=$("#xDiv",app)?.value,seq=div==="seq";
+      // ordem do curral: baia azul vai para a dieta de cor azul (ou a 1ª), vermelha para a de cor vermelha (ou a 2ª)
+      const gAz=G.find(g=>g.cor==="azul")||G[0],gVm=G.find(g=>g.cor==="vermelho"&&g!==gAz)||G.find(g=>g!==gAz)||G[0];
+      for(let i=1;i<=nb;i++){const g=div==="curral"?(ladoCurral(i)==="A"?gAz:gVm):G[seq?Math.min(G.length-1,Math.floor((i-1)*G.length/nb)):(i-1)%G.length];x.animais.push({id:uid(),baia:String(i),brinco:"",grupoId:g.id})}
       db.experiments.push(x);db.active=x.id;save();toast(nb?`Experimento criado com ${nb} baias. Confira a dieta de cada uma.`:"Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
   };
 };
