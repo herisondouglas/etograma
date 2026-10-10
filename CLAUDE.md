@@ -127,7 +127,8 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 
 ## Pendências / ideias para continuar
 
-- [x] Sincronização online com Supabase + login + convite por código (falta: o usuário criar o projeto e publicar o app num endereço da internet).
+- [x] Sincronização online com Supabase + login + convite por código. Projeto Supabase `mzsafqmrorepalkxvdhw` (schema v2 aplicado).
+- [x] Publicado: código em https://github.com/herisondouglas/etograma (ramo `main`), app em **https://herisondouglas.github.io/etograma/** (GitHub Pages, atualiza sozinho a cada push).
 - [ ] Backend para a IA (Visão IA e interpretação) fora do Claude.
 - [ ] PWA (instalar no celular, funcionar 100% offline no curral, notificação a cada 5 min).
 - [ ] Ajustar as colunas à planilha de papel que a faculdade já usa (foto ainda não enviada).
@@ -136,6 +137,8 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 - [ ] Separar `app.js` em módulos quando crescer (views/, charts/, data/).
 
 ## Comandos
+
+- Publicar: `git push` (o GitHub Pages republica em 1–2 min). No Supabase, Authentication → URL Configuration deve ter o endereço publicado (Site URL) e `http://localhost:5173` (Redirect URLs).
 
 - `npm run dev`: servidor local sem dependências (`scripts/dev-server.js`) em http://localhost:5173; `npm run dev -- --host` abre na rede Wi-Fi para testar no celular.
 - `npm test`: testa `stats.js` (valores de referência), `data.js` (desempenho, min/dia, CSV) e `sync.js` (sincronização com banco falso).

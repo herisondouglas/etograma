@@ -21,9 +21,8 @@ no mesmo experimento vê as mudanças dos outros quase na hora.
 
 Em **Authentication → URL Configuration**:
 
-- **Site URL**: o endereço onde o app abre. Para testar no computador: `http://localhost:5173`.
-  Quando o app estiver publicado na internet, troque pelo endereço dele.
-- Em **Redirect URLs**, adicione os mesmos endereços.
+- **Site URL**: `https://herisondouglas.github.io/etograma/` (endereço do app publicado).
+- Em **Redirect URLs**, adicione `https://herisondouglas.github.io/etograma/` e `http://localhost:5173` (para testes no computador).
 
 Em **Authentication → Sign In / Providers → Email**:
 
@@ -93,6 +92,5 @@ marcas <- dbGetQuery(con, "select * from vw_marcacoes")
 
 - O que fica **só no aparelho**, sem ir para o banco: os etogramas das espécies (Ajustes → Editar etogramas)
   e os dados de exemplo. Cada observação guarda a própria cópia da lista de comportamentos, então isso não atrapalha.
-- Para os observadores usarem nos **próprios celulares**, o app precisa estar publicado num endereço da internet,
-  não só no `localhost`. Depois de publicar, coloque esse endereço no passo 3.
+- O app está publicado em **https://herisondouglas.github.io/etograma/**. É esse endereço que os observadores abrem no celular.
 - No plano gratuito do Supabase, projetos parados por muito tempo podem ser pausados. Confira as regras atuais no site.
