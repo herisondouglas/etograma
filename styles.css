@@ -9,7 +9,7 @@
   --night:#080d10; --night-2:#1a2024; --on-night:#fffefd; --on-night-2:rgba(255,254,253,.62);
   --hay:#a84a00; --now:#fff0e2; --rare:#7b4fa0; --rare-2:#f1e9f7;
   --good:#18794a; --good-2:#e2f3e8; --warn:#a86a00; --warn-2:#fbefd6; --bad:#bf3429; --bad-2:#fbe6e3;
-  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100; --s5:#d9363e;
   --div-neg:#2a78d6; --div-pos:#eb6834; --div-mid:#eceee9;
   --display:"Bricolage Grotesque","Trebuchet MS",system-ui,sans-serif;
   --body:"Albert Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
@@ -22,7 +22,7 @@
   --night:#04070a; --night-2:#141a1e; --on-night:#fffefd; --on-night-2:rgba(255,254,253,.62);
   --hay:#ffa04d; --now:#2b1a09; --rare:#c39be3; --rare-2:#291f34;
   --good:#4cc47f; --good-2:#16301f; --warn:#f0a830; --warn-2:#33270f; --bad:#f0766b; --bad-2:#3a1a17;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#ef5b62;
   --div-neg:#3987e5; --div-pos:#d95926; --div-mid:#222b25; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#080d10; --surface:#0f1518; --surface-2:#172024; --ink:#f3f2ef; --ink-2:#b9bcbd; --muted:#8a8f92; --line:#20282c; --line-2:#2c363a;
@@ -30,7 +30,7 @@
   --night:#04070a; --night-2:#141a1e; --on-night:#fffefd; --on-night-2:rgba(255,254,253,.62);
   --hay:#ffa04d; --now:#2b1a09; --rare:#c39be3; --rare-2:#291f34;
   --good:#4cc47f; --good-2:#16301f; --warn:#f0a830; --warn-2:#33270f; --bad:#f0766b; --bad-2:#3a1a17;
-  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500; --s5:#ef5b62;
   --div-neg:#3987e5; --div-pos:#d95926; --div-mid:#222b25; color-scheme:dark}
 
 *{box-sizing:border-box}
@@ -265,8 +265,10 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 .anlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:8px 18px}
 .anb{display:flex;align-items:center;gap:8px;min-width:0}
-.anb .dot{border-radius:50%}
+.anb .dot,.gdot{border-radius:50%}
 .savebar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 16px 0;padding:12px 16px;border-radius:var(--r-sm);background:var(--bad-2);color:var(--ink);font-size:.9rem}
 .savebar svg{width:20px;height:20px;stroke:var(--bad);flex:none}
 .savebar span{flex:1;min-width:220px}
 @media (min-width:960px){.savebar{margin:20px 40px 0}}
+.legend svg.i{width:15px;height:15px}
+.anlist .beh{grid-template-columns:minmax(0,1fr) 132px 40px}

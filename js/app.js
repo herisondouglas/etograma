@@ -48,8 +48,9 @@ function defaultSpecies(){return[
 function exampleData(species){
   const r=rng(20261010);const sp=species.find(s=>s.id==="vaca")||species[0];
   const today=new Date();today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-56);
-  const gA={id:"gA",nome:"Dieta A",dieta:"80% concentrado",gmdMeta:1.4},gB={id:"gB",nome:"Dieta B",dieta:"50% concentrado + silagem",gmdMeta:1.0};
-  const animais=[];for(let i=1;i<=12;i++)animais.push({id:"a"+i,brinco:pad(i),grupoId:i%2?"gA":"gB"});
+  // gA = dieta 80% (mais concentrado: come menos tempo, rumina menos, ganha mais); gB = dieta 40%
+  const gA={id:"gA",nome:"Dieta 80%",dieta:"80% de concentrado",gmdMeta:1.4,cor:"vermelho"},gB={id:"gB",nome:"Dieta 40%",dieta:"40% de concentrado",gmdMeta:1.0,cor:"azul"};
+  const animais=[];for(let i=1;i<=12;i++)animais.push({id:"a"+i,brinco:String(i),grupoId:i%2?"gA":"gB"});
   const truth={};
   animais.forEach(a=>{const A=a.grupoId==="gA";
     const eat=(A?215:265)+gauss(r)*22,rum=(A?395:505)+gauss(r)*35;
@@ -59,14 +60,14 @@ function exampleData(species){
   const dates=[0,28,56].map(d=>{const x=new Date(start);x.setDate(x.getDate()+d);return isoDay(x)});
   const pesagens=dates.map((d,k)=>({id:uid(),data:d,pesos:Object.fromEntries(animais.map(a=>{const t=truth[a.id];return[a.id,Math.round((t.p0+t.gmd*k*28+gauss(r)*2.5)*2)/2]}))}));
   const consumo=dates.slice(1).map(d=>({id:uid(),data:d,valores:Object.fromEntries(animais.map(a=>[a.id,Math.round((truth[a.id].cms+gauss(r)*.25)*10)/10]))}));
-  const exp={id:"exemplo",exemplo:true,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],grupos:[gA,gB],animais,pesagens,consumo};
+  const exp={id:"exemplo",exemplo:true,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
   // etograma 24 h, 6 observadores × 2 animais
   const sessStart=new Date(start);sessStart.setDate(sessStart.getDate()+50);sessStart.setHours(7,0,0,0);
   const comp=sp.comp.map(c=>({...c}));const id=n=>comp.find(c=>c.nome.startsWith(n))?.id;
   const sessions=[];
   for(let o=0;o<6;o++){
     const pair=[animais[o*2],animais[o*2+1]];
-    const s={id:uid(),exemplo:true,expId:exp.id,nome:"Etograma 24 h · dia 50",especie:sp.nome,comp,observador:"Observador "+(o+1),animais:pair.map(a=>a.brinco),animalIds:pair.map(a=>a.id),inicio:sessStart.getTime(),intervalo:5,duracao:24,marks:{},obs:{}};
+    const s={id:uid(),exemplo:true,expId:exp.id,nome:"Etograma 24 h · dia 50",especie:sp.nome,comp,observador:"Observador "+(o+1),animais:pair.map(a=>"Baia "+a.brinco),animalIds:pair.map(a=>a.id),inicio:sessStart.getTime(),intervalo:5,duracao:24,marks:{},obs:{}};
     pair.forEach((a,k)=>{const t=truth[a.id];const pE=t.eat/1440,pR=t.rum/1440,pW=.022,pI=Math.max(.05,1-pE-pR-pW);
       s.marks[k]={};s.obs[k]={};let st="Ócio";
       for(let i=0;i<288;i++){const h=(7+i*5/60)%24;
@@ -90,7 +91,7 @@ function fresh(){const species=defaultSpecies();const ex=exampleData(species);re
 function load(){
   let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
   if(raw){
-    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return d}catch(e){}
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(d)}catch(e){}
     // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
     try{localStorage.setItem(KEYBAD,raw)}catch(e){}
   }
@@ -98,6 +99,13 @@ function load(){
   try{const raw=localStorage.getItem(KEY1);if(raw){const o=JSON.parse(raw);if(o&&o.species)d.species=o.species;if(o&&o.sessions)d.sessions.push(...o.sessions.filter(s=>!s.exemplo).map(s=>({...s,expId:null})))}}catch(e){}
   return d;
 }
+// O exemplo da primeira versão (Dieta A/B, brincos) é trocado pelo atual (baias, dieta 40% × 80%).
+function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="exemplo");
+  if(!old||old.rotulo)return d;
+  try{const ex=exampleData(d.species.some(s=>s.id==="vaca")?d.species:defaultSpecies());
+    d.experiments=d.experiments.map(x=>x===old?ex.exp:x);d.sessions=[...d.sessions.filter(s=>!s.exemplo),...ex.sessions];
+    localStorage.setItem(KEY,JSON.stringify(d))}catch(e){} // se falhar, segue com o exemplo antigo; nunca perde dados reais
+  return d}
 let db=load();
 function save(){
   try{localStorage.setItem(KEY,JSON.stringify(db));if(saveFailed){saveFailed=false;paintSaveBar()}return true}
@@ -111,7 +119,16 @@ window.addEventListener("storage",ev=>{if(ev.key!==KEY||!ev.newValue)return;
   try{const d=JSON.parse(ev.newValue);if(!d||d.v!==2)return;db=d;if(!exp())db.active=db.experiments[0]?.id||null;render();toast("Atualizado com as mudanças de outra aba")}catch(e){}});
 const exp=()=>db.experiments.find(e=>e.id===db.active)||null;
 const gIndex=(e,gid)=>Math.max(0,e.grupos.findIndex(g=>g.id===gid));
-const gColor=(e,gid)=>`var(--s${gIndex(e,gid)%4+1})`;
+// Cor de cada tratamento: a escolhida no experimento (ex.: azul = dieta 40%) ou, se não houver, pela ordem.
+const CORES=[["azul","var(--s1)","Azul"],["vermelho","var(--s5)","Vermelho"],["laranja","var(--s2)","Laranja"],["verde","var(--s3)","Verde-água"],["amarelo","var(--s4)","Amarelo"]];
+const corVar=(cor,i)=>(CORES.find(c=>c[0]===cor)||[])[1]||`var(--s${Math.max(0,i)%4+1})`;
+const gc=(e,g)=>corVar(g&&g.cor,e.grupos.indexOf(g));
+const gColor=(e,gid)=>gc(e,grupo(e,gid));
+// Identificação dos animais: por baia ("Baia 7") ou por brinco ("Animal 07").
+const porBaia=e=>e.rotulo==="Baia";
+const rot=e=>porBaia(e)?"Baia":"Animal";
+const aName=(e,a)=>`${rot(e)} ${a.brinco}`;
+const shortName=(e,a)=>porBaia(e)?aName(e,a):a.brinco;
 
 /* ================= cálculos (funções em js/data.js) ================= */
 const performance=e=>Data.performance(e);
@@ -129,7 +146,7 @@ function hbars(rows,{max,unit="",fmtv=v=>fmt(v,2),markerLabel="meta"}={}){const 
     s+=`<rect x="${lw}" y="${y+7}" width="${bw}" height="${rh-14}" rx="4" fill="var(--surface-2)"/>`;
     if(isFinite(r.value))s+=`<rect x="${lw}" y="${y+7}" width="${w}" height="${rh-14}" rx="4" fill="${r.color}" data-tip="${esc(r.tip||"")}"/>`;
     if(isFinite(r.marker)){const mx=lw+r.marker/max*bw;s+=`<line x1="${mx}" x2="${mx}" y1="${y+3}" y2="${y+rh-3}" stroke="var(--ink)" stroke-width="2" stroke-linecap="round" data-tip="${esc(markerLabel)}: ${fmtv(r.marker)} ${unit}"/>`}
-    s+=`<text class="val" x="${W-4}" y="${y+rh/2+4}" text-anchor="end">${isFinite(r.value)?fmtv(r.value):"—"}</text>`;});
+    s+=`<text class="val" x="${W-4}" y="${y+rh/2+4}" text-anchor="end"${r.flag?' style="fill:var(--bad)"':""}>${r.flag?"↓ ":""}${isFinite(r.value)?fmtv(r.value):"—"}</text>`;});
   return s+"</svg>";
 }
 function meanBars(desc,colors,unit){const W=cw(true);
@@ -287,12 +304,12 @@ VIEWS.dash=function(){
   <div class="grid g2" style="margin-top:16px">
     <section class="card">
       <div class="card-h"><div><h3>Precisam de atenção</h3><p>Ganho de peso abaixo de 90% da meta do tratamento.</p></div><button class="btn sm" data-go="perf">Ver desempenho</button></div>
-      ${abaixo.length?`<div class="list">${abaixo.map(p=>`<div class="item"><span class="dot" style="background:${gColor(e,p.grupoId)}"></span><div class="grow"><div class="title">Animal ${esc(p.brinco)} <span class="muted" style="font-weight:500">· ${esc(p.grupo)}</span></div><div class="sub">GMD ${fmt(p.gmd,2)} kg/dia · meta ${fmt(p.meta,2)} (${fmt(p.ratio*100,0)}%)</div></div>${statusPill("abaixo")}</div>`).join("")}</div>`
+      ${abaixo.length?`<div class="list">${abaixo.map(p=>`<div class="item"><span class="dot" style="background:${gColor(e,p.grupoId)}"></span><div class="grow"><div class="title">${esc(aName(e,p))} <span class="muted" style="font-weight:500">· ${esc(p.grupo)}</span></div><div class="sub">GMD ${fmt(p.gmd,2)} kg/dia · meta ${fmt(p.meta,2)} (${fmt(p.ratio*100,0)}%)</div></div>${statusPill("abaixo")}</div>`).join("")}</div>`
       :`<div class="callout">${icon("check")}<span>${gm.length?"Todos os animais estão dentro ou acima da meta de ganho.":"Lance pelo menos duas pesagens para calcular o ganho de peso."}</span></div>`}
     </section>
     <section class="card">
       <div class="card-h"><div><h3>GMD por tratamento</h3><p>Média ± erro-padrão, com a meta de cada dieta.</p></div></div>
-      <div class="viz">${hbars(e.grupos.map((g,i)=>{const v=P.filter(p=>p.grupoId===g.id).map(p=>p.gmd).filter(isFinite);const m=v.length?Stats.mean(v):NaN;return{label:g.nome,value:m,marker:+g.gmdMeta,color:`var(--s${i%4+1})`,tip:`${g.nome}: ${fmt(m,2)} kg/dia (n = ${v.length})`}}),{unit:"kg/dia",markerLabel:"Meta"})}</div>
+      <div class="viz">${hbars(e.grupos.map((g,i)=>{const v=P.filter(p=>p.grupoId===g.id).map(p=>p.gmd).filter(isFinite);const m=v.length?Stats.mean(v):NaN;return{label:g.nome,value:m,marker:+g.gmdMeta,color:gc(e,g),tip:`${g.nome}: ${fmt(m,2)} kg/dia (n = ${v.length})`}}),{unit:"kg/dia",markerLabel:"Meta"})}</div>
       <div class="legend"><span><svg width="14" height="14"><line x1="7" x2="7" y1="1" y2="13" stroke="var(--ink)" stroke-width="2"/></svg>Meta de GMD</span></div>
     </section>
   </div>
@@ -313,7 +330,7 @@ function ethogramCard(e){
   S.forEach(s=>s.animais.forEach((nm,k)=>{const M=s.marks[k]||{};const n=Math.round(s.duracao*60/s.intervalo);const slots=[];
     for(let i=0;i<n;i++){const arr=(M[i]||[]).map(cid=>norm((s.comp.find(c=>c.id===cid)||{}).nome));slots.push(BAND_COLORS.findIndex(b=>arr.includes(b[0])))}
     const aid=sessionAnimalId(e,s,k);const a=e.animais.find(x=>x.id===aid);
-    rows.push({label:a?a.brinco:nm,g:a?gIndex(e,a.grupoId):99,slots,time:i=>hhmm(new Date(s.inicio+i*s.intervalo*60000))});}));
+    rows.push({label:a?shortName(e,a):nm,g:a?gIndex(e,a.grupoId):99,slots,time:i=>hhmm(new Date(s.inicio+i*s.intervalo*60000))});}));
   rows.sort((a,b)=>a.g-b.g||a.label.localeCompare(b.label,undefined,{numeric:true}));
   const iv=S[0].intervalo;
   return`<section class="card" style="margin-top:16px">
@@ -327,7 +344,7 @@ document.addEventListener("click",e=>{if(e.target.closest("#toObs"))go({name:"ob
 /* ================= EXPERIMENTO (criar/editar) ================= */
 VIEWS.expForm=function(){
   const ed=view.id?db.experiments.find(x=>x.id===view.id):null;
-  const grupos=ed?ed.grupos:[{id:uid(),nome:"Dieta A",dieta:"",gmdMeta:1.2},{id:uid(),nome:"Dieta B",dieta:"",gmdMeta:1.0}];
+  const grupos=ed?ed.grupos.map((g,i)=>({...g,cor:g.cor||(CORES[i]||CORES[0])[0]})):[{id:uid(),nome:"Dieta 40%",dieta:"40% de concentrado",gmdMeta:1.0,cor:"azul"},{id:uid(),nome:"Dieta 80%",dieta:"80% de concentrado",gmdMeta:1.4,cor:"vermelho"}];
   // O animal tem dados se já foi pesado, teve consumo lançado ou aparece numa observação.
   const hasData=aid=>!!ed&&(ed.pesagens.some(p=>isFinite(p.pesos[aid]))||ed.consumo.some(c=>isFinite(c.valores[aid]))||db.sessions.some(s=>s.expId===ed.id&&(s.animalIds||[]).includes(aid)));
   app.innerHTML=pageHead(ed?"Editar experimento":"Novo experimento",ed?esc(ed.nome):"Configure o experimento","Cada tratamento (dieta) tem a sua meta de ganho de peso. É ela que o app usa para dizer se cada animal está no esperado.",null,"Início")+`
@@ -338,6 +355,7 @@ VIEWS.expForm=function(){
         <label class="f">Espécie<select id="xSp">${db.species.map(s=>`<option value="${s.id}"${(ed?.especieId||"vaca")===s.id?" selected":""}>${esc(s.nome)}</option>`).join("")}</select></label>
         <label class="f">Responsável<input type="text" id="xResp" value="${esc(ed?.responsavel||"")}" placeholder="Quem conduz"></label>
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
+        <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
       </div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
@@ -345,7 +363,7 @@ VIEWS.expForm=function(){
     <div class="spread"><h2>Animais <span class="muted num" id="anN"></span></h2></div>
     <div class="card">
       <div class="fields">
-        <label class="f">Adicionar animais <span class="hint">brincos separados por vírgula</span><input type="text" id="newB" placeholder="01, 03, 05, 07" autocomplete="off"></label>
+        <label class="f">Adicionar animais <span class="hint">números das baias ou brincos, separados por vírgula</span><input type="text" id="newB" placeholder="1, 3, 5, 7" autocomplete="off"></label>
         <label class="f">No tratamento<select id="newG"></select></label>
         <div class="row" style="align-self:end"><button type="button" class="btn" id="addA">${icon("plus")}Adicionar</button></div>
       </div>
@@ -356,27 +374,28 @@ VIEWS.expForm=function(){
   </form>`;
   wireBack({name:"dash"});
   const gs=$("#gs",app),an=$("#an",app),newB=$("#newB",app),newG=$("#newG",app);
-  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento"}));
+  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",cor:$('[data-k="cor"]',c).value}));
   const opts=sel=>groups().map(g=>`<option value="${g.id}"${g.id===sel?" selected":""}>${esc(g.nome)}</option>`).join("");
   const rows=()=>$$("[data-aid]",an);
   function refresh(){
     $$("select[data-g]",an).forEach(s=>{const v=s.value;s.innerHTML=opts(v)});newG.innerHTML=opts(newG.value);
-    const ids=groups().map(g=>g.id);rows().forEach(r=>{const i=ids.indexOf($("[data-g]",r).value);$(".dot",r).style.background=`var(--s${Math.max(0,i)%4+1})`});
+    const G=groups();rows().forEach(r=>{const g=G.find(g=>g.id===$("[data-g]",r).value);$(".dot",r).style.background=corVar(g&&g.cor,G.indexOf(g))});
+    $$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});
     const n=rows().length;$("#anN",app).textContent=n?`· ${n}`:"";
     const empty=$("[data-empty]",an);
     if(!n&&!empty)an.insertAdjacentHTML("beforeend",`<p class="note" data-empty>Nenhum animal ainda. Digite os brincos acima e toque em Adicionar.</p>`);
     if(n&&empty)empty.remove();
   }
   function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
-    c.innerHTML=`<div class="fields"><label class="f">Tratamento<input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
+    c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
     <div><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
-    $('[data-k="nome"]',c).addEventListener("input",refresh);
+    $('[data-k="nome"]',c).addEventListener("input",refresh);$('[data-k="cor"]',c).addEventListener("change",refresh);
     $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
       if(rows().some(r=>$("[data-g]",r).value===g.id))return toast("Mova ou remova os animais deste tratamento antes");
       c.remove();refresh()};
     gs.appendChild(c)}
   function addRow(a){const r=document.createElement("div");r.className="beh";r.dataset.aid=a.id;
-    r.innerHTML=`<label class="anb"><i class="dot"></i><input type="text" data-b value="${esc(a.brinco)}" aria-label="Brinco"></label><select data-g aria-label="Tratamento do animal">${opts(a.grupoId)}</select><button type="button" class="btn sm quiet danger" aria-label="Remover animal ${esc(a.brinco)}">${icon("x")}</button>`;
+    r.innerHTML=`<label class="anb"><i class="dot"></i><input type="text" data-b value="${esc(a.brinco)}" aria-label="Baia ou brinco"></label><select data-g aria-label="Tratamento do animal">${opts(a.grupoId)}</select><button type="button" class="btn sm quiet danger" aria-label="Remover animal ${esc(a.brinco)}">${icon("x")}</button>`;
     $("[data-g]",r).onchange=refresh;
     $("button",r).onclick=ev=>{const b=ev.currentTarget;
       if(hasData(a.id)&&!b.dataset.armed){b.dataset.armed=1;b.textContent="Apagar?";b.setAttribute("aria-label","Confirmar: remover o animal e apagar as pesagens e o consumo dele");return}
@@ -388,7 +407,7 @@ VIEWS.expForm=function(){
     newB.value="";refresh();if(dup.length)toast(`Já estava na lista: ${dup.join(", ")}`)}
   grupos.forEach(addG);
   (ed?ed.animais:[]).forEach(addRow);refresh();
-  $("#addG",app).onclick=()=>{addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1});refresh()};
+  $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
   $("#addA",app).onclick=()=>{addFromInput();newB.focus()};
   newB.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addFromInput()}});
   if(ed)$("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
@@ -396,13 +415,13 @@ VIEWS.expForm=function(){
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
     addFromInput(); // brincos digitados sem tocar em Adicionar também entram
     const sp=db.species.find(s=>s.id===$("#xSp",app).value);
-    const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0}));
+    const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0,cor:$('[data-k="cor"]',c).value}));
     const A=rows().map(r=>({id:r.dataset.aid,brinco:$("[data-b]",r).value.trim(),grupoId:$("[data-g]",r).value}));
     if(!A.length){toast("Adicione pelo menos um animal");return}
     if(A.some(a=>!a.brinco)){toast("Há um animal sem brinco");return}
     const seen=new Set(),rep=A.find(a=>{const k=norm(a.brinco);if(seen.has(k))return true;seen.add(k);return false});
     if(rep){toast(`Brinco repetido: ${rep.brinco}`);return}
-    const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,grupos:G,animais:A};
+    const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G,animais:A};
     if(ed){const keep=new Set(A.map(a=>a.id)),gone=ed.animais.filter(a=>!keep.has(a.id)).map(a=>a.id);
       ed.pesagens.forEach(p=>gone.forEach(id=>delete p.pesos[id]));ed.consumo.forEach(c=>gone.forEach(id=>delete c.valores[id]));
       Object.assign(ed,data)}
@@ -457,8 +476,8 @@ VIEWS.setup=function(){
       <label class="f">Duração<select id="dur">${[1,2,4,6,8,12,24,48].map(v=>`<option value="${v}"${v===24?" selected":""}>${v} h</option>`).join("")}</select></label>
     </div>
     <div class="stack" style="gap:8px"><span style="font-weight:600;font-size:.86rem;color:var(--ink-2)">Animais que você vai vigiar</span>
-      ${e?`<div class="checks">${e.animais.map(a=>`<label class="check"><input type="checkbox" value="${a.id}"><span>${esc(a.brinco)}</span><i class="dot" style="background:${gColor(e,a.grupoId)}" title="${esc(grupo(e,a.grupoId)?.nome||"")}"></i></label>`).join("")}</div>
-      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:var(--s${i%4+1})"></i>${esc(g.nome)}</span>`).join("")}</div>`
+      ${e?`<div class="checks">${e.animais.map(a=>`<label class="check"><input type="checkbox" value="${a.id}"><span>${esc(shortName(e,a))}</span><i class="dot" style="background:${gColor(e,a.grupoId)}" title="${esc(grupo(e,a.grupoId)?.nome||"")}"></i></label>`).join("")}</div>
+      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}</div>`
       :`<div class="stack" id="animals" style="gap:8px"></div><div><button type="button" class="btn sm quiet" id="addA">${icon("plus")}Adicionar animal</button></div>`}
     </div>
     <p class="note" id="calc"></p>
@@ -474,7 +493,7 @@ VIEWS.setup=function(){
   $("#int",app).onchange=calc;$("#dur",app).onchange=calc;calc();
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
     let animais,animalIds=null;
-    if(e){const ids=$$(".checks input:checked",app).map(c=>c.value);animalIds=ids;animais=ids.map(id=>e.animais.find(a=>a.id===id).brinco)}
+    if(e){const ids=$$(".checks input:checked",app).map(c=>c.value);animalIds=ids;animais=ids.map(id=>shortName(e,e.animais.find(a=>a.id===id)))}
     else animais=$$("input",box).map(i=>i.value.trim()).filter(Boolean);
     if(!animais.length){toast("Escolha pelo menos um animal");return}
     const[Y,M,D]=$("#data",app).value.split("-").map(Number),[h,mi]=$("#hora",app).value.split(":").map(Number);
@@ -562,17 +581,17 @@ VIEWS.perf=function(){
   const P=performance(e);const ord={abaixo:0,ok:1,acima:2,sem:3};
   const sorted=[...P].sort((x,y)=>ord[x.status]-ord[y.status]||(x.ratio||0)-(y.ratio||0));
   const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
-  const series=e.grupos.map((g,i)=>({name:g.nome,color:`var(--s${i%4+1})`,pts:pes.map(p=>{const v=e.animais.filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
+  const series=e.grupos.map((g,i)=>({name:g.nome,color:gc(e,g),pts:pes.map(p=>{const v=e.animais.filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
   app.innerHTML=pageHead("Desempenho","O lote está rendendo o esperado?","GMD = inclinação da reta do peso ao longo dos dias, usando todas as pesagens (com só duas, é (peso atual − peso inicial) ÷ dias). Conversão alimentar = consumo de matéria seca ÷ GMD. Status comparado à meta de GMD de cada tratamento: abaixo de 90% é alerta.",`<button class="btn primary" id="lp">${icon("plus")}Lançar pesagem</button><button class="btn" id="lc">${icon("plus")}Lançar consumo</button><button class="btn quiet" id="ex">${icon("down")}Exportar</button>`)+`
   <div class="stack-lg">
-  <div class="tablebox"><table class="t"><thead><tr><th>Animal</th><th>Tratamento</th><th class="r">Peso inicial</th><th class="r">Peso atual</th><th class="r">Dias</th><th class="r">GMD</th><th class="r">Meta</th><th>Status</th><th class="r">CMS</th><th class="r">CMS %PV</th><th class="r">CA</th></tr></thead><tbody>
-  ${sorted.map(p=>`<tr><td><b>${esc(p.brinco)}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,p.grupoId)}"></i>${esc(p.grupo)}</span></td><td class="r num">${fmt(p.p0,1)}</td><td class="r num">${fmt(p.pf,1)}</td><td class="r num">${p.dias??"—"}</td><td class="r num"><b>${fmt(p.gmd,2)}</b></td><td class="r num">${fmt(p.meta,2)}</td><td>${statusPill(p.status)}</td><td class="r num">${fmt(p.cms,1)}</td><td class="r num">${fmt(p.pv,2)}</td><td class="r num">${fmt(p.ca,2)}</td></tr>`).join("")}
+  <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th class="r">Peso inicial</th><th class="r">Peso atual</th><th class="r">Dias</th><th class="r">GMD</th><th class="r">Meta</th><th>Status</th><th class="r">CMS</th><th class="r">CMS %PV</th><th class="r">CA</th></tr></thead><tbody>
+  ${sorted.map(p=>`<tr><td><b>${esc(shortName(e,p))}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,p.grupoId)}"></i>${esc(p.grupo)}</span></td><td class="r num">${fmt(p.p0,1)}</td><td class="r num">${fmt(p.pf,1)}</td><td class="r num">${p.dias??"—"}</td><td class="r num"><b>${fmt(p.gmd,2)}</b></td><td class="r num">${fmt(p.meta,2)}</td><td>${statusPill(p.status)}</td><td class="r num">${fmt(p.cms,1)}</td><td class="r num">${fmt(p.pv,2)}</td><td class="r num">${fmt(p.ca,2)}</td></tr>`).join("")}
   </tbody></table></div>
   <p class="note" style="margin-top:-12px">GMD em kg/dia · CMS = consumo de matéria seca, kg/dia · CA em kg MS por kg de ganho.</p>
   <div class="grid g2">
     <section class="card"><div class="card-h"><div><h3>GMD por animal</h3><p>Barra = ganho diário; traço = meta do tratamento.</p></div></div>
-      <div class="viz">${hbars(sorted.filter(p=>isFinite(p.gmd)).map(p=>({label:"Animal "+p.brinco,value:p.gmd,marker:p.meta,color:p.status==="abaixo"?"var(--bad)":gColor(e,p.grupoId),tip:`Animal ${p.brinco} · ${p.grupo}\nGMD ${fmt(p.gmd,2)} kg/dia (${fmt(p.ratio*100,0)}% da meta)`})),{unit:"kg/dia",markerLabel:"Meta"})}</div>
-      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:var(--s${i%4+1})"></i>${esc(g.nome)}</span>`).join("")}<span><i class="dot" style="background:var(--bad)"></i>Abaixo da meta</span></div></section>
+      <div class="viz">${hbars(sorted.filter(p=>isFinite(p.gmd)).map(p=>({label:shortName(e,p),value:p.gmd,marker:p.meta,color:gColor(e,p.grupoId),flag:p.status==="abaixo",tip:`${aName(e,p)} · ${p.grupo}\nGMD ${fmt(p.gmd,2)} kg/dia (${fmt(p.ratio*100,0)}% da meta)`})),{unit:"kg/dia",markerLabel:"Meta"})}</div>
+      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}<span style="color:var(--bad)">${icon("arrowDown")}Abaixo da meta</span></div></section>
     <section class="card"><div class="card-h"><div><h3>Evolução do peso médio</h3><p>Média de cada tratamento em cada pesagem (kg).</p></div></div>
       ${series.length?`<div class="viz">${lines(series,"kg")}</div><div class="legend">${series.map(s=>`<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`:`<p class="muted">Sem pesagens ainda.</p>`}</section>
   </div>
@@ -589,8 +608,8 @@ VIEWS.entry=function(){
   const list=peso?e.pesagens:e.consumo,ed=view.id?list.find(x=>x.id===view.id):null,vals=ed?(peso?ed.pesos:ed.valores):{};
   app.innerHTML=pageHead(peso?"Pesagem":"Consumo",peso?(ed?"Editar pesagem":"Lançar pesagem"):(ed?"Editar consumo":"Lançar consumo"),peso?"Peso vivo de cada animal, em kg. Deixe em branco quem não foi pesado.":"Consumo médio de matéria seca por animal no período, em kg MS/dia (ofertado − sobras, corrigido pela MS).",null,"Desempenho")+`
   <form id="f" class="stack-lg"><div class="card"><div class="fields"><label class="f">Data<input type="date" id="d" value="${ed?.data||isoDay(new Date())}" required></label></div></div>
-  <div class="tablebox"><table class="t"><thead><tr><th>Animal</th><th>Tratamento</th><th>${peso?"Peso (kg)":"CMS (kg/dia)"}</th></tr></thead><tbody>
-  ${e.animais.map(a=>`<tr><td><b>${esc(a.brinco)}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} do animal ${esc(a.brinco)}"></td></tr>`).join("")}
+  <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th>${peso?"Peso (kg)":"CMS (kg/dia)"}</th></tr></thead><tbody>
+  ${e.animais.map(a=>`<tr><td><b>${esc(shortName(e,a))}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} · ${esc(aName(e,a))}"></td></tr>`).join("")}
   </tbody></table></div>
   <div class="row"><button class="btn primary" type="submit">Salvar</button>${ed?`<button type="button" class="btn quiet danger" id="del">Apagar este lançamento</button>`:""}</div></form>`;
   wireBack({name:"perf"});
@@ -630,10 +649,10 @@ VIEWS.stats=function(){
     <div class="viz" id="heat"></div><p class="note" id="heatNote"></p>
   </section>
   <section class="stack"><h3>Dados por animal</h3>
-    <div class="tablebox"><table class="t"><thead><tr><th>Animal</th><th>Tratamento</th>${V.map(v=>`<th class="r">${esc(v.nome)}</th>`).join("")}</tr></thead><tbody>
-    ${D.rows.map(r=>`<tr><td><b>${esc(r.brinco)}</b></td><td>${esc(r.grupo)}</td>${V.map(v=>`<td class="r num">${fmt(r.v[v.key],v.comp?0:2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>
+    <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th>${V.map(v=>`<th class="r">${esc(v.nome)}</th>`).join("")}</tr></thead><tbody>
+    ${D.rows.map(r=>`<tr><td><b>${esc(shortName(e,r))}</b></td><td>${esc(r.grupo)}</td>${V.map(v=>`<td class="r num">${fmt(r.v[v.key],v.comp?0:2)}</td>`).join("")}</tr>`).join("")}</tbody></table></div></section>
   </div>`;
-  const cols=e.grupos.map((g,i)=>`var(--s${i%4+1})`);
+  const cols=e.grupos.map(g=>gc(e,g));
   function doAnova(){const v=V.find(x=>x.key===statState.v);const res=Stats.anova(e.grupos.map(g=>({nome:g.nome,vals:D.rows.filter(r=>r.grupoId===g.id).map(r=>r.v[v.key])})));
     const unit=(v.nome.match(/\(([^)]+)\)/)||[])[1]||"";const best=[...res.desc].sort((a,b)=>b.media-a.media)[0];
     const sig=res.p<.05;
@@ -650,8 +669,8 @@ VIEWS.stats=function(){
     $("#corrOut",app).innerHTML=c.n<3||!isFinite(c.r)?`<p class="muted">Precisa de pelo menos 3 animais com as duas variáveis.</p>`:`
       <div class="verdict${c.p<.05?" sig":""}">${corrWords(c.r,c.p)}${vx.key!==vy.key?` A reta indica que cada 1 unidade a mais em <i>${esc(vx.nome)}</i> está associada a ${fmt(c.b,3)} em <i>${esc(vy.nome)}</i>.`:""}</div>
       <div class="statline"><div><b>${fmt(c.r,3)}</b><span>r</span></div><div><b>${fmt(c.r2,3)}</b><span>R²</span></div><div><b>${fmtP(c.p)}</b><span>p</span></div><div><b>${c.n}</b><span>n</span></div><div><b>y = ${fmt(c.a,3)} ${c.b<0?"−":"+"} ${fmt(Math.abs(c.b),4)}x</b><span>Equação</span></div></div>
-      <div class="viz">${scatter(rows.map(r=>({x:r.v[vx.key],y:r.v[vy.key],color:gColor(e,r.grupoId),tip:`Animal ${r.brinco} · ${r.grupo}\n${vx.nome}: ${fmt(r.v[vx.key],2)}\n${vy.nome}: ${fmt(r.v[vy.key],2)}`})),c,vx.nome,vy.nome)}</div>
-      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:var(--s${i%4+1});border-radius:50%"></i>${esc(g.nome)}</span>`).join("")}<span><svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4"/></svg>Reta de regressão</span></div>`;}
+      <div class="viz">${scatter(rows.map(r=>({x:r.v[vx.key],y:r.v[vy.key],color:gColor(e,r.grupoId),tip:`${aName(e,r)} · ${r.grupo}\n${vx.nome}: ${fmt(r.v[vx.key],2)}\n${vy.nome}: ${fmt(r.v[vy.key],2)}`})),c,vx.nome,vy.nome)}</div>
+      <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)};border-radius:50%"></i>${esc(g.nome)}</span>`).join("")}<span><svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4"/></svg>Reta de regressão</span></div>`;}
   function doHeat(){const M=V.map(a=>V.map(b=>{const rows=D.rows.filter(r=>isFinite(r.v[a.key])&&isFinite(r.v[b.key]));return Stats.pearson(rows.map(r=>r.v[a.key]),rows.map(r=>r.v[b.key]))}));
     // Muitos pares testados de uma vez: corrige o p (Benjamini-Hochberg) para não marcar correlações que são só acaso.
     const up=[];V.forEach((_,i)=>V.forEach((_,j)=>{if(j>i)up.push([i,j])}));const q=Stats.bh(up.map(([i,j])=>M[i][j].p));

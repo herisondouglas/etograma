@@ -61,8 +61,9 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
   species: [{ id, nome, comp: [{ id, nome, tipo: "comum" | "raro" }] }],
   experiments: [{
     id, nome, especieId, especie, responsavel, inicio: "AAAA-MM-DD", exemplo?,
-    grupos:  [{ id, nome, dieta, gmdMeta /* kg/dia */ }],
-    animais: [{ id, brinco, grupoId }],
+    rotulo: "Baia" | "Animal",   // como os animais são identificados: "Baia 7" (número da baia) ou "Animal 07" (brinco)
+    grupos:  [{ id, nome, dieta, gmdMeta /* kg/dia */, cor: "azul"|"vermelho"|"laranja"|"verde"|"amarelo" }],
+    animais: [{ id, brinco /* nº da baia ou brinco */, grupoId }],
     pesagens:[{ id, data, pesos:   { [animalId]: kg } }],
     consumo: [{ id, data, valores: { [animalId]: kgMS_dia } }]
   }],
@@ -100,7 +101,7 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 - Fontes: Bricolage Grotesque (títulos, rótulos, botões), Albert Sans (texto), JetBrains Mono (números).
 - Roxo para comportamentos fora do comum; verde só como status "bom".
 - Cores de status (verde/âmbar/vermelho) só para status, sempre com ícone + texto.
-- Cor de cada tratamento é fixa em todos os gráficos (paleta categórica validada para daltonismo: azul, laranja, verde-água, amarelo).
+- Cor de cada tratamento é escolhida no experimento e fixa em todos os gráficos. No experimento real da faculdade: **baias 1–12, Dieta 40% = azul, Dieta 80% = vermelho** (é o código de cores que eles usam). Por isso "abaixo da meta" nunca é pintado de vermelho nos gráficos: aparece como seta ↓ + número em vermelho.
 - Sem `alert/confirm`: exclusões pedem um segundo toque ("Confirmar?").
 
 ## Pendências / ideias para continuar
