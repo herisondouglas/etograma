@@ -120,38 +120,43 @@ create index if not exists intakes_exp    on public.intakes(experiment_id, updat
 create index if not exists sessions_exp   on public.sessions(experiment_id, updated_at);
 create index if not exists sessions_owner on public.sessions(owner);
 create index if not exists members_user   on public.experiment_members(user_id);
+create index if not exists experiments_owner_idx on public.experiments(owner);
 
 -- ---------- funções auxiliares ----------
+-- As funções usadas pelas regras de acesso ficam no esquema "private", que a API pública não enxerga.
+create schema if not exists private;
+grant usage on schema private to authenticated;
+
 -- updated_at sempre com a hora do servidor (o app usa isso para buscar só o que mudou)
-create or replace function public.touch() returns trigger language plpgsql as $$
+create or replace function public.touch() returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at := clock_timestamp(); return new; end $$;
 
-create or replace function public.is_member(exp text) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from experiment_members where experiment_id = exp and user_id = auth.uid())
+create or replace function private.is_member(exp text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()))
 $$;
 
-create or replace function public.is_responsavel(exp text) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (select 1 from experiment_members where experiment_id = exp and user_id = auth.uid() and papel = 'responsavel')
+create or replace function private.is_responsavel(exp text) returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()) and papel = 'responsavel')
 $$;
 
 -- quem cria o experimento vira responsável automaticamente
 create or replace function public.add_owner_member() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
-  insert into experiment_members(experiment_id, user_id, papel) values (new.id, new.owner, 'responsavel')
+  insert into public.experiment_members(experiment_id, user_id, papel) values (new.id, new.owner, 'responsavel')
   on conflict do nothing;
   return new;
 end $$;
 
 -- dono e código não mudam; só o responsável apaga o experimento
 create or replace function public.guard_experiment() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
   new.owner  := old.owner;
   new.codigo := old.codigo;
-  if new.deleted and not old.deleted and not is_responsavel(old.id) then
+  if new.deleted and not old.deleted and not private.is_responsavel(old.id) then
     raise exception 'Só o responsável pode apagar o experimento';
   end if;
   return new;
@@ -159,27 +164,27 @@ end $$;
 
 -- a observação continua sendo de quem criou
 create or replace function public.guard_session() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin new.owner := old.owner; return new; end $$;
 
 -- perfil criado junto com a conta (nome vem do cadastro no app)
 create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 begin
-  insert into profiles(id, nome) values (new.id, coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)))
+  insert into public.profiles(id, nome) values (new.id, coalesce(new.raw_user_meta_data->>'nome', split_part(new.email, '@', 1)))
   on conflict (id) do nothing;
   return new;
 end $$;
 
--- entrar num experimento com o código de convite
+-- entrar num experimento com o código de convite (só com login)
 create or replace function public.join_experiment(p_codigo text) returns text
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = '' as $$
 declare v_id text;
 begin
   if auth.uid() is null then raise exception 'Faça login primeiro'; end if;
-  select id into v_id from experiments where codigo = upper(trim(p_codigo)) and not deleted;
+  select id into v_id from public.experiments where codigo = upper(trim(p_codigo)) and not deleted;
   if v_id is null then raise exception 'Código não encontrado'; end if;
-  insert into experiment_members(experiment_id, user_id, papel) values (v_id, auth.uid(), 'observador')
+  insert into public.experiment_members(experiment_id, user_id, papel) values (v_id, auth.uid(), 'observador')
   on conflict do nothing;
   return v_id;
 end $$;
@@ -215,23 +220,23 @@ alter table public.sessions           enable row level security;
 
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles for select to authenticated using (
-  id = auth.uid() or exists (
+  id = (select auth.uid()) or exists (
     select 1 from experiment_members a join experiment_members b using (experiment_id)
-    where a.user_id = auth.uid() and b.user_id = profiles.id));
+    where a.user_id = (select auth.uid()) and b.user_id = profiles.id));
 drop policy if exists profiles_update on public.profiles;
-create policy profiles_update on public.profiles for update to authenticated using (id = auth.uid()) with check (id = auth.uid());
+create policy profiles_update on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 drop policy if exists experiments_select on public.experiments;
-create policy experiments_select on public.experiments for select to authenticated using (owner = auth.uid() or is_member(id));
+create policy experiments_select on public.experiments for select to authenticated using (owner = (select auth.uid()) or private.is_member(id));
 drop policy if exists experiments_insert on public.experiments;
-create policy experiments_insert on public.experiments for insert to authenticated with check (owner = auth.uid());
+create policy experiments_insert on public.experiments for insert to authenticated with check (owner = (select auth.uid()));
 drop policy if exists experiments_update on public.experiments;
-create policy experiments_update on public.experiments for update to authenticated using (is_member(id)) with check (is_member(id));
+create policy experiments_update on public.experiments for update to authenticated using (private.is_member(id)) with check (private.is_member(id));
 
 drop policy if exists members_select on public.experiment_members;
-create policy members_select on public.experiment_members for select to authenticated using (user_id = auth.uid() or is_member(experiment_id));
+create policy members_select on public.experiment_members for select to authenticated using (user_id = (select auth.uid()) or private.is_member(experiment_id));
 drop policy if exists members_delete on public.experiment_members;
-create policy members_delete on public.experiment_members for delete to authenticated using (user_id = auth.uid() or is_responsavel(experiment_id));
+create policy members_delete on public.experiment_members for delete to authenticated using (user_id = (select auth.uid()) or private.is_responsavel(experiment_id));
 -- (entrar só pelo código: join_experiment; não há insert direto)
 
 do $$
@@ -239,27 +244,36 @@ declare t text;
 begin
   foreach t in array array['treatments','animals','weighings','intakes'] loop
     execute format('drop policy if exists %1$s_all on public.%1$s', t);
-    execute format('create policy %1$s_all on public.%1$s for all to authenticated using (is_member(experiment_id)) with check (is_member(experiment_id))', t);
+    execute format('create policy %1$s_all on public.%1$s for all to authenticated using (private.is_member(experiment_id)) with check (private.is_member(experiment_id))', t);
   end loop;
 end $$;
 
 drop policy if exists sessions_select on public.sessions;
 create policy sessions_select on public.sessions for select to authenticated
-  using (owner = auth.uid() or (experiment_id is not null and is_member(experiment_id)));
+  using (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id)));
 drop policy if exists sessions_insert on public.sessions;
 create policy sessions_insert on public.sessions for insert to authenticated
-  with check (owner = auth.uid() and (experiment_id is null or is_member(experiment_id)));
+  with check (owner = (select auth.uid()) and (experiment_id is null or private.is_member(experiment_id)));
 drop policy if exists sessions_update on public.sessions;
 create policy sessions_update on public.sessions for update to authenticated
-  using (owner = auth.uid() or (experiment_id is not null and is_member(experiment_id)))
-  with check (experiment_id is null and owner = auth.uid() or experiment_id is not null and is_member(experiment_id));
+  using (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id)))
+  with check (experiment_id is null and owner = (select auth.uid()) or experiment_id is not null and private.is_member(experiment_id));
+
+-- versões antigas das funções auxiliares (ficavam expostas na API)
+drop function if exists public.is_member(text);
+drop function if exists public.is_responsavel(text);
 
 grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.experiments, public.experiment_members, public.treatments,
   public.animals, public.weighings, public.intakes, public.sessions to authenticated;
 grant select, update on public.profiles to authenticated;
-revoke all on function public.join_experiment(text) from public;
+revoke all on function public.join_experiment(text) from public, anon;
 grant execute on function public.join_experiment(text) to authenticated;
+revoke all on function private.is_member(text), private.is_responsavel(text) from public, anon;
+grant execute on function private.is_member(text), private.is_responsavel(text) to authenticated;
+-- funções de gatilho não são chamadas pela API (o gatilho roda mesmo assim)
+revoke all on function public.touch(), public.add_owner_member(), public.guard_experiment(),
+  public.guard_session(), public.handle_new_user() from public, anon, authenticated;
 
 -- ---------- tempo real (outros celulares recebem as mudanças na hora) ----------
 do $$
