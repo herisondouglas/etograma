@@ -24,6 +24,10 @@ index.html            página
 styles.css            visual (tokens de cor, claro/escuro)
 js/stats.js           estatística (ANOVA, Pearson, valores de p)
 js/data.js            cálculos de dados (GMD, min/dia, CSV)
+js/sync.js            sincronização com o Supabase
+js/config.js          endereço e chave pública do Supabase (opcional)
+supabase/schema.sql   banco de dados (tabelas, segurança, visões)
+docs/SUPABASE.md      passo a passo do banco de dados
 js/app.js             o app (telas, gráficos, dados)
 tests/                testes (npm test)
 scripts/build-single.js
@@ -33,6 +37,6 @@ CLAUDE.md             contexto completo para continuar com o Claude
 
 ## Observações
 
-- Os dados ficam no navegador (localStorage). Use Ajustes → "Salvar cópia" para backup.
+- Os dados ficam no navegador (localStorage) e, com login, também no Supabase (veja docs/SUPABASE.md). Use Ajustes → "Salvar cópia" para backup.
 - A IA (Visão IA e "Interpretar com IA") só funciona quando o app roda dentro do Claude.
   Para rodar fora, é preciso um backend com a API da Anthropic (ver CLAUDE.md).

@@ -40,7 +40,10 @@ Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nasci
 - HTML/CSS/JS puro, sem framework e sem build. Abra `index.html` (ou use o Live Server do VS Code).
 - `js/stats.js`: funções estatísticas puras (beta incompleta, p de t e F, Pearson, ANOVA, Benjamini-Hochberg, niceTicks). Testadas em `tests/stats.test.js`.
 - `js/data.js`: cálculos puros de dados (desempenho/GMD por regressão, comportamento em min/dia, CSV de ida e volta, assinatura para não duplicar importação). Testados em `tests/data.test.js`. **Lógica nova de dados vai aqui, com teste**, não no `app.js`.
-- `js/app.js`: telas, gráficos SVG feitos à mão, armazenamento e integração com o Claude.
+- `js/sync.js`: sincronização com o Supabase (toRows/applyRows, push/pull com "sombra" do que já está no banco). Puro, cliente injetado; testado em `tests/sync.test.js` com banco falso.
+- `js/config.js`: URL e chave **pública** do Supabase (opcional; também dá para colar em Ajustes).
+- `supabase/schema.sql`: tabelas, RLS, convite por código, gatilhos e visões `vw_*` para R/SAS. Idempotente. Passo a passo em `docs/SUPABASE.md`.
+- `js/app.js`: telas, gráficos SVG feitos à mão, armazenamento local, nuvem (seção NUVEM) e integração com o Claude.
   Roteador simples: `go({name:...})` → `VIEWS[name]()` desenha em `#app`.
 - `styles.css`: design system em tokens CSS (claro/escuro).
 - Dados em `localStorage` (chave `etograma.v2`). Migra a chave antiga `etograma.v1` do primeiro protótipo.
@@ -49,6 +52,18 @@ Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nasci
   - Outra aba que salva dispara o evento `storage` e esta aba recarrega o `db` (não sobrescreve o trabalho da outra).
 - Na primeira abertura carrega um **experimento de exemplo** (dados simulados, marcados `exemplo: true`).
 - `scripts/build-single.js` gera `dist/etograma.html` (arquivo único). É o formato usado para publicar como Artifact no Claude.
+
+### Banco de dados (Supabase): offline-first
+- Fonte da verdade da tela = `db` no localStorage. `save()` = `saveLocal()` + `cloudChanged()` (agenda envio em 1,5 s).
+- `syncNow()`: push (só linhas cuja forma canônica difere da sombra em `etograma.sync`) → refaz pull do que o banco recusou → pull incremental (`updated_at > lastPull − 15 s`). Alteração local pendente nunca é sobrescrita pelo pull.
+- Exclusão = `deleted = true` (chega aos outros aparelhos). Apagar experimento só envia o experimento (filhos não). Só o responsável apaga (gatilho no banco).
+- Tempo real (postgres_changes) + reserva a cada 60 s + ao voltar a internet/aba.
+- Exemplo (`exemplo: true`) e etogramas das espécies **não** sobem.
+- Login e-mail/senha; quem cria vira `responsavel`; observadores entram com `join_experiment(código)`. Código aparece no Início e em Editar experimento.
+- Sair da conta: bloqueado se houver pendências; depois remove do aparelho o que veio do banco (`Sync.forget`). Outra conta no mesmo aparelho também limpa.
+- Restaurar cópia / Apagar tudo com login: zera a sombra (vira mesclagem; nada é apagado no banco).
+- supabase-js 2.45.4 carregado do jsDelivr só quando há configuração.
+- Testes do SQL: rodados com PGlite (Postgres em WASM) simulando `auth.uid()`; o roteiro não está no repo (precisa de `npm i @electric-sql/pglite`).
 
 ### Integrações que só existem dentro do Claude (Artifact)
 `window.claude.use("sample")` (IA: interpretar estatística e Visão IA) e `window.claude.use("downloads")`.
@@ -112,7 +127,7 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 
 ## Pendências / ideias para continuar
 
-- [ ] Sincronização online (todos os observadores no mesmo experimento em tempo real). Ex.: Supabase/Firebase + login.
+- [x] Sincronização online com Supabase + login + convite por código (falta: o usuário criar o projeto e publicar o app num endereço da internet).
 - [ ] Backend para a IA (Visão IA e interpretação) fora do Claude.
 - [ ] PWA (instalar no celular, funcionar 100% offline no curral, notificação a cada 5 min).
 - [ ] Ajustar as colunas à planilha de papel que a faculdade já usa (foto ainda não enviada).
@@ -123,6 +138,6 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 ## Comandos
 
 - `npm run dev`: servidor local sem dependências (`scripts/dev-server.js`) em http://localhost:5173; `npm run dev -- --host` abre na rede Wi-Fi para testar no celular.
-- `npm test`: testa `stats.js` (valores de referência) e `data.js` (desempenho, min/dia, CSV).
+- `npm test`: testa `stats.js` (valores de referência), `data.js` (desempenho, min/dia, CSV) e `sync.js` (sincronização com banco falso).
 - `npm run build`: gera `dist/etograma.html` (arquivo único).
 - Rodar: abrir `index.html` no navegador ou usar a extensão Live Server.

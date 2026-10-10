@@ -32,6 +32,7 @@ const IC={
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  cloud:'<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6-1.4A4.5 4.5 0 0 0 7 18.5z"/>',
   tag:'<path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.6"/>'
 };
 const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
@@ -114,11 +115,13 @@ function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="ex
     localStorage.setItem(KEY,JSON.stringify(d))}catch(e){} // se falhar, segue com o exemplo antigo; nunca perde dados reais
   return d}
 let db=load();
-function save(){
+function saveLocal(){
   try{localStorage.setItem(KEY,JSON.stringify(db));if(saveFailed){saveFailed=false;paintSaveBar()}return true}
   catch(e){saveFailed=true;paintSaveBar();return false}
 }
-try{if(!localStorage.getItem(KEY))save()}catch(e){}
+// salva no aparelho e, se houver login, agenda o envio para o banco
+function save(){const ok=saveLocal();cloudChanged();return ok}
+try{if(!localStorage.getItem(KEY))saveLocal()}catch(e){}
 function paintSaveBar(){const b=document.getElementById("saveErr");if(b)b.hidden=!saveFailed}
 function badCopy(){try{return localStorage.getItem(KEYBAD)}catch(e){return null}}
 // Outra aba (ou janela) salvou: recarrega daqui para não apagar o que foi marcado lá.
@@ -244,12 +247,13 @@ document.getElementById("root").innerHTML=`
     <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</div>
     <div class="expbox"><span class="eyebrow">Experimento</span><select id="expSelD" aria-label="Experimento ativo"></select></div>
     <nav id="navD">${TABS.map(t=>`<button data-tab="${t[0]}">${icon(t[2])}${t[1]}</button>`).join("")}</nav>
-    <div class="foot"><nav><button data-tab="ajustes">${icon("gear")}Ajustes</button></nav></div>
+    <div class="foot"><button class="syncchip" data-tab="ajustes" hidden><i class="sdot"></i><span class="t"></span></button><nav><button data-tab="ajustes">${icon("gear")}Ajustes</button></nav></div>
   </aside>
   <div style="min-width:0;display:flex;flex-direction:column">
     <header class="topbar">
       <div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</div>
       <div class="expsel"><select id="expSelM" aria-label="Experimento ativo"></select></div>
+      <button class="iconbtn syncchip" data-tab="ajustes" hidden>${icon("cloud")}<i class="sdot"></i><span class="t sr"></span></button>
       <button class="iconbtn" data-tab="ajustes" aria-label="Ajustes">${icon("gear")}</button>
     </header>
     <div class="savebar" id="saveErr" role="alert" hidden>${icon("alert")}<span><b>As marcações não estão sendo salvas neste aparelho.</b> A memória do navegador pode estar cheia ou bloqueada (aba anônima). Não feche esta página: salve uma cópia agora.</span><button class="btn sm" id="saveErrBk">${icon("down")}Salvar cópia</button></div>
@@ -282,8 +286,8 @@ function render(){
 const pageHead=(eyebrow,title,sub,actions,back)=>`<div class="page-h">${back?`<button class="crumb" data-back>${icon("back")}${esc(back)}</button>`:""}<span class="eyebrow">${eyebrow}</span><h1>${title}</h1>${sub?`<p class="ink2" style="max-width:62ch">${sub}</p>`:""}${actions?`<div class="row">${actions}</div>`:""}</div>`;
 function wireBack(to){const b=$("[data-back]",app);if(b)b.onclick=()=>go(to)}
 const statusPill=st=>({acima:`<span class="pill good">${icon("arrowUp")}Acima</span>`,ok:`<span class="pill good">${icon("check")}No esperado</span>`,abaixo:`<span class="pill bad">${icon("arrowDown")}Abaixo</span>`,sem:`<span class="pill neutral">${icon("minus")}Sem dados</span>`,saiu:`<span class="pill neutral">${icon("x")}Saiu</span>`})[st];
-const needExp=()=>`<div class="card"><div class="empty"><h3>Nenhum experimento ativo</h3><p>Crie um experimento para lançar animais, dietas, pesagens e observações.</p><button class="btn primary" id="mkExp">${icon("plus")}Criar experimento</button></div></div>`;
-function wireNeedExp(){const b=$("#mkExp",app);if(b)b.onclick=()=>go({name:"expForm"})}
+const needExp=()=>`<div class="card"><div class="empty"><h3>Nenhum experimento ativo</h3><p>Crie um experimento para lançar animais, dietas, pesagens e observações.</p><div class="row" style="justify-content:center"><button class="btn primary" id="mkExp">${icon("plus")}Criar experimento</button><button class="btn" id="hasCode">Tenho um código</button></div></div></div>`;
+function wireNeedExp(){const b=$("#mkExp",app);if(b)b.onclick=()=>go({name:"expForm"});const c=$("#hasCode",app);if(c)c.onclick=()=>go({name:"settings"})}
 
 /* ================= INÍCIO ================= */
 const VIEWS={};
@@ -300,6 +304,7 @@ VIEWS.dash=function(){
     <div class="stack" style="gap:8px"><span class="eyebrow">${esc(e.especie)} · ${e.grupos.map(g=>esc(g.nome)).join(" vs ")}${e.exemplo?" · dados de exemplo":""}</span><h1>${esc(e.nome)}</h1></div>
     <div class="facts">
       <div><b class="tnum">Dia ${Math.max(dia,1)}</b><span>início ${dmy(parseDay(e.inicio))}</span></div>
+      ${e.codigo?`<button class="fact" id="copyCode" title="Copiar código"><b class="num">${esc(e.codigo)}</b><span>código p/ observadores</span></button>`:""}
       <button class="fact" data-go="animais"><b class="tnum">${PA.length}</b><span>animais${nSaiu?` · ${nSaiu} saiu`:""} ›</span></button>
       <div><b class="tnum">${e.grupos.length}</b><span>tratamentos</span></div>
       <div><b>${esc(e.responsavel||"—")}</b><span>responsável</span></div>
@@ -331,6 +336,7 @@ VIEWS.dash=function(){
   </section>`;
   $$("[data-go]",app).forEach(b=>b.onclick=()=>{const g=b.dataset.go;go(g==="setup"?{name:"setup",sp:e.especieId}:g==="peso"?{name:"entry",kind:"peso"}:g==="edit"?{name:"expForm",id:e.id}:g==="new"?{name:"expForm"}:g==="animais"?{name:"animals"}:{name:"perf"})});
   $$("[data-act]",app).forEach(b=>b.onclick=()=>{db.active=b.dataset.act;save();render()});
+  const cc=$("#copyCode",app);if(cc)cc.onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(e.codigo):Promise.reject()).then(()=>toast(`Código ${e.codigo} copiado. Os observadores entram em Ajustes → Entrar em um experimento.`)).catch(()=>toast(`Código: ${e.codigo}`))};
 };
 function ethogramCard(e){
   const sess=db.sessions.filter(s=>s.expId===e.id&&s.comp.some(c=>BAND_COLORS.some(b=>b[0]===norm(c.nome))));
@@ -372,6 +378,7 @@ VIEWS.expForm=function(){
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
     ${ed?"":`<section class="card" data-nb id="bCard"><div class="card-h"><div><h3>Dieta de cada baia</h3><p>Toque numa baia para trocar a dieta. As que estão como “escolher” ainda não têm dieta.</p></div></div><div class="bgrid" id="bGrid"></div><p class="note" id="bSum"></p></section>`}
+    ${ed?`<section class="card"><div class="card-h"><div><h3>Observadores</h3><p>${ed.codigo?`Código do experimento: <b class="num">${esc(ed.codigo)}</b>. Cada observador cria a conta dele e entra em Ajustes → Entrar em um experimento.`:"Para trabalhar junto com outros observadores, entre na sua conta em Ajustes: depois de enviado ao banco, o experimento ganha um código de convite."}</p></div></div></section>`:""}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Animais</h3><p>${ed.animais.length} cadastrado(s). O cadastro de cada animal (baia, brinco, raça, sexo, nascimento) fica na aba Animais.</p></div><button type="button" class="btn sm" id="toAn">${icon("tag")}Abrir animais</button></div></section>`:""}
     <div class="row"><button class="btn primary" type="submit">${ed?"Salvar alterações":"Criar experimento"}</button>${ed?`<button type="button" class="btn quiet danger" id="delX">Apagar experimento</button>`:""}</div>
   </form>`;
@@ -411,7 +418,7 @@ VIEWS.expForm=function(){
     $("#bGrid",app).addEventListener("click",ev=>{const b=ev.target.closest("[data-b]");if(!b)return;const G=groups(),k=+b.dataset.b,i=G.findIndex(g=>g.id===asg[k]);asg[k]=G[(i+1)%G.length].id;paintGrid()})}
   $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
   if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
-    $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
+    $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent=Cloud.user&&ed.codigo?"Confirmar: apagar experimento e seus registros (também no banco, para todos)?":"Confirmar: apagar experimento e seus registros?";return}
       db.experiments=db.experiments.filter(x=>x!==ed);db.sessions=db.sessions.filter(s=>s.expId!==ed.id);db.active=db.experiments[0]?.id||null;save();toast("Experimento apagado");go({name:"dash"})}}
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
     const sp=db.species.find(s=>s.id===$("#xSp",app).value);
@@ -938,6 +945,7 @@ VIEWS.settings=function(){
   const hasEx=db.experiments.some(x=>x.exemplo)||db.sessions.some(s=>s.exemplo);
   app.innerHTML=pageHead("Ajustes","Dados e configuração")+`
   <div class="grid g2">
+    ${cloudCard()}
     <section class="card"><div class="card-h"><div><h3>Animais e comportamentos</h3><p>Edite o etograma de cada espécie ou crie uma nova.</p></div></div><div><button class="btn" id="spc">Editar etogramas</button></div></section>
     <section class="card"><div class="card-h"><div><h3>Juntar planilhas dos observadores</h3><p>Cada observador exporta a planilha no celular dele; aqui você importa todas no experimento ativo${exp()?` (<b>${esc(exp().nome)}</b>)`:""}.</p></div></div>
       <label class="btn" for="csvIn" style="align-self:flex-start">${icon("up")}Importar planilhas (.csv)</label><input type="file" id="csvIn" accept=".csv,text/csv" multiple hidden><p class="note" id="csvMsg"></p></section>
@@ -945,23 +953,24 @@ VIEWS.settings=function(){
       <div class="row"><button class="btn" id="bk">${icon("down")}Salvar cópia</button><label class="btn" for="bkIn">${icon("up")}Restaurar cópia</label><input type="file" id="bkIn" accept=".json,application/json" hidden></div><p class="note" id="bkMsg"></p></section>
     ${badCopy()?`<section class="card"><div class="card-h"><div><h3>Dados antigos não lidos</h3><p>Ao abrir, o app encontrou dados salvos que não conseguiu ler (arquivo corrompido ou de outra versão). Eles foram guardados sem alteração. Baixe o arquivo e envie para quem cuida do app.</p></div></div>
       <div class="row"><button class="btn" id="badDl">${icon("down")}Baixar dados não lidos</button><button class="btn quiet danger" id="badRm">Descartar</button></div></section>`:""}
-    <section class="card"><div class="card-h"><div><h3>Limpar</h3><p>Apaga dados deste aparelho.</p></div></div>
+    <section class="card"><div class="card-h"><div><h3>Limpar</h3><p>Apaga dados deste aparelho.${Cloud.user?" Não apaga nada do banco: o que está lá volta na próxima sincronização.":""}</p></div></div>
       <div class="row">${hasEx?`<button class="btn" id="rmEx">Apagar dados de exemplo</button>`:`<button class="btn" id="addEx">Carregar exemplo</button>`}<button class="btn quiet danger" id="wipe">Apagar tudo</button></div></section>
   </div>
-  <p class="note" style="margin-top:22px">Etograma · protótipo. Os dados ficam salvos só neste aparelho e navegador.</p>`;
+  <p class="note" style="margin-top:22px">Etograma · protótipo. ${Cloud.user?"Os dados ficam neste aparelho e no banco de dados (Supabase).":"Os dados ficam salvos só neste aparelho e navegador."}</p>`;
+  wireCloudCard();
   $("#spc",app).onclick=()=>go({name:"species"});
   $("#bk",app).onclick=()=>saveFile(`etograma-copia-${isoDay(new Date())}.json`,JSON.stringify(db),"application/json");
   $("#bkIn",app).onchange=async ev=>{const f=ev.target.files[0],msg=$("#bkMsg",app);ev.target.value="";if(!f)return;let d;
     try{d=JSON.parse(await f.text());if(d.v!==2||!Array.isArray(d.experiments)||!Array.isArray(d.sessions))throw 0}catch(err){msg.textContent="Esse arquivo não é uma cópia do Etograma.";return}
     msg.innerHTML=`Cópia com ${d.experiments.length} experimento(s) e ${d.sessions.length} observação(ões). Isso substitui tudo o que está neste aparelho. <button class="btn sm primary" id="bkOk">Substituir</button>`;
-    $("#bkOk",app).onclick=()=>{db=Data.migrate(d);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Cópia restaurada");go({name:"dash"})}};
+    $("#bkOk",app).onclick=()=>{db=Data.migrate(d);if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Cópia restaurada");go({name:"dash"})}};
   const bd=$("#badDl",app);if(bd){bd.onclick=()=>saveFile(`etograma-dados-nao-lidos-${isoDay(new Date())}.json`,badCopy(),"application/json");
     $("#badRm",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar descarte?";return}try{localStorage.removeItem(KEYBAD)}catch(e){}render()}}
   $("#csvIn",app).onchange=async ev=>{const fs=[...ev.target.files];ev.target.value="";let n=0,dup=0,errs=[];for(const f of fs){try{const r=importCSV(await f.text());n+=r.added;dup+=r.dup}catch(err){errs.push(f.name)}}save();
     $("#csvMsg",app).textContent=`${n} observação(ões) importada(s)${dup?` · ${dup} já existia(m) e foi(ram) ignorada(s)`:""}${errs.length?`. Não reconheci: ${errs.join(", ")}`:""}.`;if(n)toast("Planilhas importadas")};
   const rm=$("#rmEx",app);if(rm)rm.onclick=()=>{db.experiments=db.experiments.filter(x=>!x.exemplo);db.sessions=db.sessions.filter(s=>!s.exemplo);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Exemplo apagado");render()};
   const ad=$("#addEx",app);if(ad)ad.onclick=()=>{const ex=exampleData(db.species);db.experiments.push(ex.exp);db.sessions.push(...ex.sessions);db.active=ex.exp.id;save();toast("Exemplo carregado");go({name:"dash"})};
-  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,species:defaultSpecies(),experiments:[],sessions:[],active:null};save();toast("Tudo apagado");go({name:"dash"})};
+  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,speciesV:2,species:defaultSpecies(),experiments:[],sessions:[],active:null};if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}save();toast(Cloud.user?"Aparelho limpo. Os dados do banco voltam na próxima sincronização.":"Tudo apagado");go({name:"dash"})};
 };
 VIEWS.species=function(){
   app.innerHTML=pageHead("Ajustes","Etogramas","Mudanças valem para as próximas observações. As já começadas continuam com a lista original.",`<button class="btn" id="addSp">${icon("plus")}Nova espécie</button><button class="btn quiet danger" id="reset">Restaurar padrão</button>`,"Ajustes")+`<div id="spList" class="grid g2"></div>`;
@@ -978,6 +987,148 @@ VIEWS.species=function(){
   $("#addSp",app).onclick=()=>{db.species.push({id:uid(),nome:"Nova espécie",comp:[B("Comendo"),B("Bebendo água"),B("Ócio")]});save();render()};
   $("#reset",app).onclick=ev=>{const b=ev.currentTarget;if(b.dataset.armed){db.species=defaultSpecies();save();render();toast("Etogramas padrão restaurados")}else{b.dataset.armed=1;b.textContent="Confirmar?"}};
 };
+
+/* ================= NUVEM (Supabase) ================= */
+// O app salva primeiro no aparelho; com login e internet, sincroniza com o banco (js/sync.js).
+const CLOUD_KEY="etograma.nuvem",SYNC_KEY="etograma.sync",SUPA_JS="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js";
+const Cloud={status:"off",client:null,user:null,lastSync:null,error:"",pending:0,timer:null,running:false,again:false,recovery:false,mode:"in",channel:null};
+function cloudCfg(){let c=null;try{c=JSON.parse(localStorage.getItem(CLOUD_KEY)||"null")}catch(e){}
+  const f=window.ETOGRAMA_SUPABASE||{};return c&&c.url?c:(f.url&&f.anonKey?{url:f.url,anonKey:f.anonKey,fixo:true}:null)}
+let syncState={user:null,lastPull:null,shadow:{}};
+try{syncState={...syncState,...JSON.parse(localStorage.getItem(SYNC_KEY)||"{}")}}catch(e){}
+const saveSync=()=>{try{localStorage.setItem(SYNC_KEY,JSON.stringify(syncState))}catch(e){}};
+window.addEventListener("storage",ev=>{if(ev.key===SYNC_KEY&&ev.newValue)try{syncState=JSON.parse(ev.newValue)}catch(e){}});
+function loadScript(src){return new Promise((res,rej)=>{if(window.supabase&&window.supabase.createClient)return res();
+  const s=document.createElement("script");s.src=src;s.onload=res;s.onerror=()=>{s.remove();rej(new Error("Failed to fetch"))};document.head.appendChild(s)})}
+// Mensagens do Supabase em português simples
+function ptErr(e){const m=String(e&&(e.message||e)||"");
+  const map=[[/invalid login credentials/i,"E-mail ou senha incorretos."],[/email not confirmed/i,"Confirme o e-mail antes de entrar (veja a caixa de entrada e o spam)."],
+    [/already registered|already been registered/i,"Já existe uma conta com esse e-mail. Use Entrar."],[/password should be at least/i,"A senha precisa ter pelo menos 6 caracteres."],
+    [/for security purposes|rate limit|too many/i,"Muitas tentativas seguidas. Espere um minuto e tente de novo."],[/unable to validate email|invalid email/i,"E-mail inválido."],
+    [/fetch|network|load failed/i,"Sem internet. Tente de novo quando tiver sinal."],[/código não encontrado/i,"Código não encontrado. Confira com o responsável."],
+    [/row-level security|permission denied/i,"Sem permissão para essa alteração."]];
+  for(const[r,t]of map)if(r.test(m))return t;return m||"Algo deu errado."}
+
+async function cloudStart(){
+  const cfg=cloudCfg();if(!cfg){Cloud.status="off";paintSync();return}
+  Cloud.status="loading";paintSync();
+  try{await loadScript(SUPA_JS)}catch(e){Cloud.status="offline";paintSync();return} // sem internet: tenta de novo quando voltar
+  if(!Cloud.client){
+    Cloud.client=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"etograma.auth"}});
+    Cloud.client.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY"){Cloud.recovery=true;go({name:"settings"})}setTimeout(()=>setUser(session?.user||null),0)});
+  }
+  const{data}=await Cloud.client.auth.getSession();setUser(data.session?.user||null);
+}
+function setUser(u){const prev=Cloud.user?.id;Cloud.user=u;if(u)Cloud.mode="in"; // depois de sair, o cartão volta em "Entrar"
+  
+  if(!u){Cloud.status="out";unsubscribe();paintSync();if(view.name==="settings")render();return}
+  if(prev===u.id)return;
+  // outra conta neste aparelho: tira daqui o que veio da conta anterior (continua salvo no banco)
+  if(syncState.user&&syncState.user!==u.id){Sync.forget(db,syncState.shadow);syncState={user:u.id,lastPull:null,shadow:{}};saveLocal()}
+  syncState.user=u.id;saveSync();subscribe();syncNow();if(view.name==="settings")render();
+}
+function subscribe(){unsubscribe();if(!Cloud.client)return;
+  Cloud.channel=Cloud.client.channel("etograma-"+uid()).on("postgres_changes",{event:"*",schema:"public"},()=>schedule(1200)).subscribe()}
+function unsubscribe(){if(Cloud.channel){try{Cloud.client.removeChannel(Cloud.channel)}catch(e){}Cloud.channel=null}}
+function schedule(ms){if(!Cloud.user)return;clearTimeout(Cloud.timer);Cloud.timer=setTimeout(syncNow,ms)}
+// chamado a cada save(): conta o que falta enviar e agenda o envio
+let pendT=null;
+function cloudChanged(){if(!Cloud.user)return;schedule(1500);clearTimeout(pendT);pendT=setTimeout(()=>{Cloud.pending=Sync.pendingCount(db,syncState.shadow);paintSync()},400)}
+
+async function syncNow(){
+  if(!Cloud.client||!Cloud.user)return;
+  if(Cloud.running){Cloud.again=true;return}
+  if(navigator.onLine===false){Cloud.status="offline";Cloud.pending=Sync.pendingCount(db,syncState.shadow);paintSync();return}
+  Cloud.running=true;Cloud.status="syncing";paintSync();
+  try{
+    do{Cloud.again=false;const changed=new Set(),add=c=>c.forEach(k=>changed.add(k));
+      const r=await Sync.push(Cloud.client,db,syncState.shadow);saveSync();
+      // o que o banco recusou volta para a versão do banco
+      for(const t in r.refetch){
+        if(t==="experiments")for(const id of r.refetch[t])add((await Sync.pull(Cloud.client,db,syncState.shadow,{experimentId:id})).changed);
+        else add((await Sync.pull(Cloud.client,db,syncState.shadow,{ids:{[t]:r.refetch[t]}})).changed)}
+      const since=syncState.lastPull?new Date(Date.parse(syncState.lastPull)-15000).toISOString():null; // 15 s de folga
+      const p=await Sync.pull(Cloud.client,db,syncState.shadow,{since});add(p.changed);
+      if(p.lastPull&&(!syncState.lastPull||p.lastPull>syncState.lastPull))syncState.lastPull=p.lastPull;
+      saveSync();
+      if(changed.size){saveLocal();afterRemote(changed)}
+      Cloud.error=[...new Set(r.erros.map(e=>ptErr(e.mensagem)))].join(" ");
+      if(Cloud.error)toast("O banco recusou uma alteração: "+Cloud.error);
+    }while(Cloud.again);
+    Cloud.lastSync=new Date();Cloud.status=Cloud.error?"error":"ok";
+  }catch(e){Cloud.status=e.network||navigator.onLine===false?"offline":"error";if(Cloud.status==="error")Cloud.error=ptErr(e)}
+  finally{Cloud.running=false;Cloud.pending=Sync.pendingCount(db,syncState.shadow);paintSync()}
+}
+// Chegou mudança de outro aparelho: redesenha sem atrapalhar quem está digitando ou marcando
+function afterRemote(changed){
+  if(!exp()&&db.experiments[0])db.active=db.experiments[0].id;
+  if(view.name==="sheet"){if(changed.has("sessions:"+view.id))render();else renderChrome();return}
+  if(["expForm","animalForm","entry","setup","species"].includes(view.name)){renderChrome();toast("Dados atualizados por outro aparelho");return}
+  const a=document.activeElement;if(a&&app.contains(a)&&/^(INPUT|TEXTAREA)$/.test(a.tagName)){renderChrome();return}
+  render()}
+const syncText=()=>({off:"",loading:"Conectando…",out:"Entrar para sincronizar",syncing:"Sincronizando…",
+  ok:`Sincronizado${Cloud.lastSync?" às "+hhmm(Cloud.lastSync):""}`,
+  offline:Cloud.pending?`Sem internet · ${Cloud.pending} ${Cloud.pending===1?"alteração":"alterações"} no aparelho`:"Sem internet · tudo salvo no aparelho",
+  error:"Erro ao sincronizar"})[Cloud.status];
+function paintSync(){const t=syncText();
+  for(const el of $$(".syncchip")){el.hidden=Cloud.status==="off";el.dataset.st=Cloud.status;$(".t",el).textContent=t;el.title=Cloud.error||t}
+  const s=$("#cloudSt",app);if(s)s.textContent=t+(Cloud.error?` — ${Cloud.error}`:"");$$(".syncdot",app).forEach(d=>d.dataset.st=Cloud.status)}
+window.addEventListener("online",()=>{if(!Cloud.client)cloudStart();else syncNow()});
+window.addEventListener("offline",()=>{if(Cloud.user){Cloud.status="offline";paintSync()}});
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")schedule(300)});
+setInterval(()=>{if(Cloud.user&&document.visibilityState==="visible")syncNow()},60000); // reserva, caso o tempo real caia
+
+// Cartão "Banco de dados" em Ajustes
+function cloudCard(){
+  const cfg=cloudCfg(),u=Cloud.user;
+  if(!cfg)return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Banco de dados na nuvem</h3><p>Conecte ao Supabase para os observadores trabalharem juntos e os dados ficarem guardados fora do celular. Passo a passo em <b>docs/SUPABASE.md</b>.</p></div></div>
+    <div class="fields"><label class="f">Endereço do projeto<input type="url" id="cUrl" placeholder="https://abcdefgh.supabase.co" autocomplete="off" spellcheck="false"></label><label class="f">Chave pública <span class="hint">anon / publishable, nunca a secreta</span><input type="text" id="cKey" placeholder="eyJ… ou sb_publishable_…" autocomplete="off" spellcheck="false"></label></div>
+    <div class="row"><button class="btn primary" id="cSave">Conectar</button></div><p class="note" id="cMsg"></p></section>`;
+  if(Cloud.status==="loading"||(!Cloud.client&&Cloud.status!=="offline"))return`<section class="card cloud" id="cloudCard"><h3>Banco de dados</h3><p class="note" id="cloudSt">Conectando…</p></section>`;
+  if(!Cloud.client)return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Banco de dados</h3><p>Sem internet agora. O app continua funcionando e guarda tudo neste aparelho; quando a conexão voltar, ele se conecta sozinho.</p></div></div></section>`;
+  if(Cloud.recovery)return`<section class="card cloud" id="cloudCard"><h3>Criar nova senha</h3><div class="fields"><label class="f">Nova senha <span class="hint">mínimo 6 caracteres</span><input type="password" id="rPass" autocomplete="new-password"></label></div><div class="row"><button class="btn primary" id="rGo">Salvar senha</button></div><p class="note" id="rMsg"></p></section>`;
+  if(!u){const up=Cloud.mode==="up";return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>${up?"Criar conta":"Entrar"}</h3><p>Cada observador usa a própria conta. Depois de entrar, o que está neste aparelho vai para o banco.</p></div></div>
+    <div class="seg" role="group" aria-label="Entrar ou criar conta"><button type="button" aria-pressed="${!up}" data-mode="in">Entrar</button><button type="button" aria-pressed="${up}" data-mode="up">Criar conta</button></div>
+    <form class="stack" id="aForm"><div class="fields">${up?`<label class="f">Seu nome<input type="text" id="aNome" autocomplete="name" required></label>`:""}<label class="f">E-mail<input type="email" id="aMail" autocomplete="email" required></label><label class="f">Senha <span class="hint">mínimo 6 caracteres</span><input type="password" id="aPass" minlength="6" autocomplete="${up?"new-password":"current-password"}" required></label></div>
+    <div class="row"><button class="btn primary" type="submit">${up?"Criar conta":"Entrar"}</button>${up?"":`<button type="button" class="btn quiet" id="aForgot">Esqueci a senha</button>`}${cfg.fixo?"":`<button type="button" class="btn quiet" id="cOff">Trocar de projeto</button>`}</div></form><p class="note" id="aMsg"></p></section>`}
+  const nome=u.user_metadata?.nome||u.email;
+  return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Conta e sincronização</h3><p>Conectado como <b>${esc(nome)}</b>${nome!==u.email?` (${esc(u.email)})`:""}.</p></div></div>
+    <div class="callout"><span class="syncdot" data-st="${Cloud.status}"></span><span id="cloudSt"></span></div>
+    <div class="row"><button class="btn" id="cSync">Sincronizar agora</button><button class="btn quiet danger" id="cOut">Sair da conta</button></div>
+    <div class="stack" style="gap:8px;border-top:1px solid var(--line);padding-top:14px"><h3 style="font-size:1rem">Entrar em um experimento</h3><p class="note">Peça o código ao responsável: ele aparece no painel do experimento (Início).</p>
+      <form class="row" id="jForm" style="flex-wrap:nowrap"><input type="text" id="jCode" placeholder="Ex.: 7A3B9C" maxlength="12" autocomplete="off" spellcheck="false" style="max-width:180px;text-transform:uppercase" aria-label="Código do experimento"><button class="btn" type="submit">Entrar</button></form><p class="note" id="jMsg"></p></div></section>`;
+}
+function wireCloudCard(){
+  const msg=(id,t)=>{const el=$(id,app);if(el)el.textContent=t};
+  const cs=$("#cSave",app);if(cs)cs.onclick=()=>{const url=$("#cUrl",app).value.trim().replace(/\/+$/,""),key=$("#cKey",app).value.trim();
+    const err=Sync.checkUrl(url)||Sync.checkKey(key);if(err)return msg("#cMsg",err);
+    try{localStorage.setItem(CLOUD_KEY,JSON.stringify({url,anonKey:key}))}catch(e){}cloudStart().then(render);render()};
+  $$("[data-mode]",app).forEach(b=>b.onclick=()=>{Cloud.mode=b.dataset.mode;render()});
+  const af=$("#aForm",app);if(af)af.onsubmit=async ev=>{ev.preventDefault();const btn=$("button[type=submit]",af);btn.disabled=true;msg("#aMsg","Aguarde…");
+    const email=$("#aMail",app).value.trim(),password=$("#aPass",app).value;
+    try{if(Cloud.mode==="up"){const{data,error}=await Cloud.client.auth.signUp({email,password,options:{data:{nome:$("#aNome",app).value.trim()},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;
+        if(!data.session){msg("#aMsg",`Conta criada. Enviamos um e-mail para ${email}: abra o link de confirmação e depois entre aqui.`);Cloud.mode="in";btn.disabled=false;return}}
+      else{const{error}=await Cloud.client.auth.signInWithPassword({email,password});if(error)throw error}
+      toast("Conectado. Sincronizando…")}
+    catch(e){msg("#aMsg",ptErr(e));btn.disabled=false}};
+  const fg=$("#aForgot",app);if(fg)fg.onclick=async()=>{const email=$("#aMail",app).value.trim();if(!email)return msg("#aMsg","Digite o seu e-mail acima e toque em Esqueci a senha.");
+    const{error}=await Cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.href.split("#")[0]});msg("#aMsg",error?ptErr(error):`Enviamos um link para ${email} para criar uma nova senha.`)};
+  const rg=$("#rGo",app);if(rg)rg.onclick=async()=>{const{error}=await Cloud.client.auth.updateUser({password:$("#rPass",app).value});if(error)return msg("#rMsg",ptErr(error));Cloud.recovery=false;toast("Senha alterada");render()};
+  const co=$("#cOff",app);if(co)co.onclick=()=>{try{localStorage.removeItem(CLOUD_KEY)}catch(e){}unsubscribe();Cloud.client=null;Cloud.status="off";paintSync();render()};
+  const sy=$("#cSync",app);if(sy)sy.onclick=()=>syncNow();
+  const out=$("#cOut",app);if(out)out.onclick=async ev=>{const b=ev.currentTarget;
+    await syncNow();const n=Sync.pendingCount(db,syncState.shadow);
+    if(n){msg("#jMsg","");toast(`Há ${n} ${n===1?"alteração":"alterações"} ainda não enviada(s). Conecte-se à internet e sincronize antes de sair.`);return}
+    if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: sair? (os dados continuam no banco)";return}
+    Sync.forget(db,syncState.shadow);syncState={user:null,lastPull:null,shadow:{}};saveSync();saveLocal();
+    unsubscribe();await Cloud.client.auth.signOut();toast("Você saiu da conta");go({name:"settings"})};
+  const jf=$("#jForm",app);if(jf)jf.onsubmit=async ev=>{ev.preventDefault();const code=$("#jCode",app).value.trim();if(!code)return;msg("#jMsg","Entrando…");
+    try{const{data:id,error}=await Cloud.client.rpc("join_experiment",{p_codigo:code});if(error)throw error;
+      await Sync.pull(Cloud.client,db,syncState.shadow,{experimentId:id});saveSync();db.active=id;saveLocal();
+      toast(`Você entrou em ${exp()?.nome||"um experimento"}`);go({name:"dash"})}
+    catch(e){msg("#jMsg",ptErr(e))}};
+  paintSync();
+}
 
 /* ================= arquivos ================= */
 function exportSession(s){saveFile((s.nome+" - "+(s.observador||"observador")+" - "+s.animais.join(", ")).replace(/[\/:*?"<>|]/g,"-")+".csv",sessionCSV(s))}
@@ -1006,5 +1157,5 @@ document.addEventListener("scroll",()=>tip.hidden=true,true);
 function place(ev){const w=tip.offsetWidth,h=tip.offsetHeight;let x=ev.clientX+14,y=ev.clientY-h-12;if(x+w>innerWidth-8)x=ev.clientX-w-14;if(y<8)y=ev.clientY+18;tip.style.left=Math.max(8,x)+"px";tip.style.top=y+"px"}
 
 if(!db.active&&db.experiments[0])db.active=db.experiments[0].id;
-render();claude();
+render();claude();cloudStart();
 })();
