@@ -540,7 +540,8 @@ function defaultSpecies(){return[
   {id:"vaca",nome:"Vaca",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
   {id:"cavalo",nome:"Cavalo",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Rolando","raro"),B("Escoiceando","raro"),B("Se coçando / esfregando","raro")]},
   {id:"ovelha",nome:"Ovelha",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
-  {id:"galinha",nome:"Galinha",comp:[B("Comendo"),B("Bebendo água"),B("Ciscando"),B("Empoleirada"),B("Deitada"),B("Andando"),B("Arrumando penas"),B("Banho de terra"),B("Bicando outra ave","raro"),B("Ofegando","raro")]}
+  {id:"galinha",nome:"Galinha",comp:[B("Comendo"),B("Bebendo água"),B("Ciscando"),B("Empoleirada"),B("Deitada"),B("Andando"),B("Arrumando penas"),B("Banho de terra"),B("Bicando outra ave","raro"),B("Ofegando","raro")]},
+  {id:"porco",nome:"Porco",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Sentado"),B("Andando"),B("Fuçando / explorando"),B("Defecando"),B("Urinando"),B("Mordendo outro animal","raro"),B("Brigando","raro"),B("Se coçando / esfregando","raro")]}
 ]}
 
 /* Exemplo realista: confinamento com 12 vacas em 2 dietas, 3 pesagens, consumo e 24 h de etograma */
@@ -586,11 +587,11 @@ function exampleData(species){
 /* ================= armazenamento ================= */
 const KEYBAD="etograma.ilegivel"; // cópia de dados que não puderam ser lidos: nunca são sobrescritos sem aviso
 let saveFailed=false;
-function fresh(){const species=defaultSpecies();const ex=exampleData(species);return{v:2,species,experiments:[ex.exp],sessions:ex.sessions,active:ex.exp.id}}
+function fresh(){const species=defaultSpecies();const ex=exampleData(species);return{v:2,speciesV:2,species,experiments:[ex.exp],sessions:ex.sessions,active:ex.exp.id}}
 function load(){
   let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
   if(raw){
-    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(Data.migrate(d))}catch(e){}
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(addNewSpecies(Data.migrate(d)))}catch(e){}
     // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
     try{localStorage.setItem(KEYBAD,raw)}catch(e){}
   }
@@ -599,6 +600,7 @@ function load(){
   return d;
 }
 // Exemplo de versões anteriores é trocado pelo atual (baias 1–12, dieta 40% × 80%, cadastro completo dos animais).
+function addNewSpecies(d){if((d.speciesV||1)<2){if(!d.species.some(s=>s.id==="porco"||norm(s.nome)==="porco"))d.species.push(defaultSpecies().find(s=>s.id==="porco"));d.speciesV=2}return d}
 function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="exemplo");
   if(!old||old.exemploV===3)return d;
   try{const ex=exampleData(d.species.some(s=>s.id==="vaca")?d.species:defaultSpecies());
@@ -857,6 +859,8 @@ VIEWS.expForm=function(){
         <label class="f">Responsável<input type="text" id="xResp" value="${esc(ed?.responsavel||"")}" placeholder="Quem conduz"></label>
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
         <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
+        ${ed?"":`<label class="f" data-nb>Quantas baias <span class="hint">um animal por baia; dá para adicionar mais depois</span><input type="number" id="xNB" value="12" min="0" max="500" inputmode="numeric"></label>
+        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
       </div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
@@ -877,6 +881,7 @@ VIEWS.expForm=function(){
       c.remove()};
     gs.appendChild(c)}
   grupos.forEach(addG);refresh();
+  const rotSel=$("#xRot",app),showNB=()=>$$("[data-nb]",app).forEach(l=>l.hidden=rotSel.value!=="Baia");rotSel.onchange=showNB;showNB();
   $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
   if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
     $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
@@ -886,7 +891,11 @@ VIEWS.expForm=function(){
     const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0,cor:$('[data-k="cor"]',c).value}));
     const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
-    else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};db.experiments.push(x);db.active=x.id;save();toast("Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
+    else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
+      // já cria Baia 1…N (um animal por baia), divididas entre as dietas; tudo pode ser corrigido na aba Animais
+      const nb=data.rotulo==="Baia"?Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0))):0,seq=$("#xDiv",app)?.value==="seq";
+      for(let i=1;i<=nb;i++){const gi=seq?Math.min(G.length-1,Math.floor((i-1)*G.length/nb)):(i-1)%G.length;x.animais.push({id:uid(),baia:String(i),brinco:"",grupoId:G[gi].id})}
+      db.experiments.push(x);db.active=x.id;save();toast(nb?`Experimento criado com ${nb} baias. Confira a dieta de cada uma.`:"Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
   };
 };
 
@@ -894,8 +903,11 @@ VIEWS.expForm=function(){
 const RACAS={vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
   cavalo:["Mangalarga Marchador","Quarto de Milha","Crioulo","Árabe","Puro-Sangue Inglês","Campolina","Sem raça definida"],
   ovelha:["Santa Inês","Dorper","Texel","Morada Nova","Suffolk","Lacaune","Sem raça definida"],
-  galinha:["Caipira","Embrapa 051","Isa Brown","Hy-Line","Cobb","Ross"]};
+  galinha:["Caipira","Embrapa 051","Isa Brown","Hy-Line","Cobb","Ross"],
+  porco:["Comercial (híbrido)","Large White","Landrace","Duroc","Pietrain","Moura","Piau"]};
 const SEXOS=["Macho","Fêmea","Macho castrado"];
+// Próximo número de baia livre (depois do maior número usado por um animal ativo).
+const nextBaia=e=>String(Math.max(0,...ativos(e).map(a=>parseInt(a.baia,10)).filter(isFinite))+1);
 const sortAnimals=e=>[...e.animais].sort((a,b)=>idOf(e,a).localeCompare(idOf(e,b),undefined,{numeric:true}));
 const fmtIdade=m=>!isFinite(m)||m<0?"":m<24?`${m} ${m===1?"mês":"meses"}`:`${Math.floor(m/12)} anos${m%12?` e ${m%12} m`:""}`;
 // Mantém o nome mostrado nas observações igual ao cadastro (ex.: depois de corrigir o número da baia).
@@ -914,7 +926,7 @@ VIEWS.animals=function(){
   app.innerHTML=pageHead("Animais","Cadastro de animais",`${list.length} animal(is) em <b>${esc(e.nome)}</b>${out.length?` (e ${out.length} que ${out.length===1?"saiu":"saíram"})`:""}. Corrigir um animal aqui mantém as pesagens, o consumo e as observações dele.`,`<button class="btn primary" id="newA">${icon("plus")}Cadastrar animal</button><button class="btn quiet" id="exA">${icon("down")}Exportar lista</button>`)+`
   <div class="stack-lg">
     <section class="card"><div class="card-h"><div><h3>Cadastro rápido</h3><p>Vários animais de uma vez pelo número ${porBaia(e)?"da baia":"do brinco"}. Ex.: <span class="num">1-12</span> ou <span class="num">1, 3, 5</span>. Raça, sexo e nascimento você completa depois em Editar.</p></div></div>
-      <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button></div></div></section>
+      <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button>${porBaia(e)?`<button type="button" class="btn" id="nextB">${icon("plus")}Baia ${nextBaia(e)}</button>`:""}</div></div></section>
     <div class="spread"><div class="legend">${counts}</div>${list.length>8?`<input type="search" id="qFind" placeholder="Procurar ${idLbl}, raça…" aria-label="Procurar animal" style="max-width:260px">`:""}</div>
     <div class="list" id="anList">${list.length?list.map(item).join(""):`<div class="empty">Nenhum animal ativo cadastrado.<span>Use o cadastro rápido acima ou o botão "Cadastrar animal".</span></div>`}</div>
     ${out.length?`<section class="stack"><h3>Saíram do experimento</h3><p class="note" style="margin-top:-6px">Continuam no histórico, mas não entram nas médias, nos alertas nem na estatística.</p><div class="list out" id="anOut">${out.map(item).join("")}</div></section>`:""}
@@ -925,6 +937,7 @@ VIEWS.animals=function(){
     const have=new Set(ativos(e).map(a=>norm(idOf(e,a)))),dup=[];let n=0;const gid=$("#qG",app).value;
     for(const id of ids){if(have.has(norm(id))){dup.push(id);continue}have.add(norm(id));e.animais.push(porBaia(e)?{id:uid(),baia:id,brinco:"",grupoId:gid}:{id:uid(),brinco:id,grupoId:gid});n++}
     save();view.g=gid;render();toast(`${n} animal(is) cadastrado(s)${dup.length?` · já existia(m): ${dup.join(", ")}`:""}`)};
+  const nb=$("#nextB",app);if(nb)nb.onclick=()=>{const gid=$("#qG",app).value,n=nextBaia(e);e.animais.push({id:uid(),baia:n,brinco:"",grupoId:gid});save();view.g=gid;render();toast(`Baia ${n} adicionada em ${grupo(e,gid)?.nome||""}`)};
   $("#qAdd",app).onclick=add;$("#qIds",app).addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();add()}});
   const f=$("#qFind",app);if(f)f.oninput=()=>{const q=norm(f.value);$$("#anList .item, #anOut .item",app).forEach(it=>it.hidden=!!q&&!it.dataset.s.includes(q))};
   $("#exA",app).onclick=()=>saveFile(`${e.nome} - animais.csv`,toCSV([["Baia","Brinco","Tratamento","Raça","Sexo","Nascimento","Idade (meses)","Observações","Situação","Data de saída","Motivo da saída"],

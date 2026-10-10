@@ -10,7 +10,9 @@ por 24 h, marcando com X de 5 em 5 minutos o que o animal faz (comer, ruminar, b
 urinar, deitar, em pé, ócio, e coisas fora do comum como espernear e se coçar/esfregar).
 Depois os dados vão para um programa de estatística para ver se o desempenho está dentro do esperado,
 relacionando tempo de ruminação e consumo com a qualidade da dieta.
-Fazem isso com vaca, cavalo, ovelha e galinha.
+Fazem isso com vaca, cavalo, ovelha, galinha e porco.
+
+**Baias (confirmado pelo usuário):** curral dividido em baias individuais, **um animal por baia**; a baia só separa um animal do outro (não tem a ver com espécie). A espécie é escolhida no experimento e todas as baias dele são dessa espécie (ex.: vaca → baias 1–12 só de vaca). Precisa dar para adicionar mais baias. Ainda NÃO confirmado: como as dietas foram sorteadas entre as baias (DIC ou blocos), se os animais trocam de dieta entre períodos, e quais baias são azuis (40%) e quais vermelhas (80%).
 
 Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel); se der certo, vender a ideia.
 
@@ -80,7 +82,7 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 }
 ```
 
-Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. **Saída do experimento** (`a.saida`, `Data.ativo`): o animal fica no histórico (pesagens, observações, tabela de desempenho com status "Saiu", CSVs com coluna Situação), mas sai de médias, alertas, KPIs, gráficos por tratamento, nova observação, lançamento de pesagem (salvo se já tem valor nele) e da estatística (`Data.dataset` filtra; a tela avisa quantos ficaram de fora). A baia de quem saiu pode ser reocupada; desfazer a saída é bloqueado se a baia estiver ocupada. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
+Ao criar um experimento por baia, o app já cria Baia 1…N (padrão 12) divididas entre as dietas (alternando ou em sequência); na aba Animais o botão "+ Baia N" acrescenta a próxima. Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. **Saída do experimento** (`a.saida`, `Data.ativo`): o animal fica no histórico (pesagens, observações, tabela de desempenho com status "Saiu", CSVs com coluna Situação), mas sai de médias, alertas, KPIs, gráficos por tratamento, nova observação, lançamento de pesagem (salvo se já tem valor nele) e da estatística (`Data.dataset` filtra; a tela avisa quantos ficaram de fora). A baia de quem saiu pode ser reocupada; desfazer a saída é bloqueado se a baia estiver ocupada. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
 
 GMD = inclinação da regressão linear peso × dias com todas as pesagens (com 2 pesagens é igual a (final − inicial)/dias).
 
