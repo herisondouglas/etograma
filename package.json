@@ -1,0 +1,10 @@
+{
+  "name": "etograma",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Registro de análise comportamental de animais, desempenho e estatística automática.",
+  "scripts": {
+    "test": "node tests/stats.test.js",
+    "build": "node scripts/build-single.js"
+  }
+}
