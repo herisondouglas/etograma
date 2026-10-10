@@ -11,4 +11,7 @@ const an = S.anova([{ nome: "a", vals: [1, 2, 3] }, { nome: "b", vals: [4, 5, 6]
 near(an.F, 27); near(an.p, 0.001);
 const c = S.pearson([1, 2, 3, 4, 5], [2, 4, 5, 4, 5]);
 near(c.r, 0.7746); near(c.p, 0.124); near(c.b, 0.6); near(c.a, 2.2);
+// Benjamini-Hochberg (mesmo resultado de p.adjust(method = "BH") no R)
+const q = S.bh([0.01, 0.04, 0.03, NaN, 0.005]);
+near(q[0], 0.02); near(q[1], 0.04); near(q[2], 0.04); assert.ok(isNaN(q[3])); near(q[4], 0.02);
 console.log("Estatística: todos os testes passaram.");

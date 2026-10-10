@@ -2,17 +2,11 @@
 "use strict";
 /* ================= utilidades ================= */
 const KEY="etograma.v2",KEY1="etograma.v1";
-const uid=()=>Math.random().toString(36).slice(2,9);
+const{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,nSlots,slotDate,marked,toCSV,sessionCSV}=Data;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const pad=n=>String(n).padStart(2,"0");
-const hhmm=d=>pad(d.getHours())+":"+pad(d.getMinutes());
-const dmy=d=>pad(d.getDate())+"/"+pad(d.getMonth()+1)+"/"+d.getFullYear();
 const isoDay=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
-const parseDay=s=>{const[y,m,d]=String(s).split("-").map(Number);return new Date(y,m-1,d)};
-const dayDiff=(a,b)=>Math.round((parseDay(b)-parseDay(a))/864e5);
 const fmt=(v,d=1)=>isFinite(v)?Number(v).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}):"—";
 const fmtP=p=>!isFinite(p)?"—":p<0.001?"< 0,001":fmt(p,3);
-const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim();
 const fmtDur=min=>{min=Math.round(min);const h=Math.floor(min/60),m=min%60;return h?(h+" h"+(m?" "+pad(m):"")):m+" min"};
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
@@ -90,57 +84,39 @@ function exampleData(species){
 }
 
 /* ================= armazenamento ================= */
+const KEYBAD="etograma.ilegivel"; // cópia de dados que não puderam ser lidos: nunca são sobrescritos sem aviso
+let saveFailed=false;
 function fresh(){const species=defaultSpecies();const ex=exampleData(species);return{v:2,species,experiments:[ex.exp],sessions:ex.sessions,active:ex.exp.id}}
 function load(){
-  try{const raw=localStorage.getItem(KEY);if(raw){const d=JSON.parse(raw);if(d&&d.v===2)return d}}catch(e){}
+  let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
+  if(raw){
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return d}catch(e){}
+    // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
+    try{localStorage.setItem(KEYBAD,raw)}catch(e){}
+  }
   const d=fresh();
   try{const raw=localStorage.getItem(KEY1);if(raw){const o=JSON.parse(raw);if(o&&o.species)d.species=o.species;if(o&&o.sessions)d.sessions.push(...o.sessions.filter(s=>!s.exemplo).map(s=>({...s,expId:null})))}}catch(e){}
   return d;
 }
 let db=load();
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db))}catch(e){}}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(db));if(saveFailed){saveFailed=false;paintSaveBar()}return true}
+  catch(e){saveFailed=true;paintSaveBar();return false}
+}
+try{if(!localStorage.getItem(KEY))save()}catch(e){}
+function paintSaveBar(){const b=document.getElementById("saveErr");if(b)b.hidden=!saveFailed}
+function badCopy(){try{return localStorage.getItem(KEYBAD)}catch(e){return null}}
+// Outra aba (ou janela) salvou: recarrega daqui para não apagar o que foi marcado lá.
+window.addEventListener("storage",ev=>{if(ev.key!==KEY||!ev.newValue)return;
+  try{const d=JSON.parse(ev.newValue);if(!d||d.v!==2)return;db=d;if(!exp())db.active=db.experiments[0]?.id||null;render();toast("Atualizado com as mudanças de outra aba")}catch(e){}});
 const exp=()=>db.experiments.find(e=>e.id===db.active)||null;
-const grupo=(e,gid)=>e.grupos.find(g=>g.id===gid);
 const gIndex=(e,gid)=>Math.max(0,e.grupos.findIndex(g=>g.id===gid));
 const gColor=(e,gid)=>`var(--s${gIndex(e,gid)%4+1})`;
 
-/* ================= cálculos ================= */
-function performance(e){
-  const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
-  return e.animais.map(a=>{
-    const pts=pes.filter(p=>isFinite(p.pesos[a.id])).map(p=>({d:p.data,w:+p.pesos[a.id]}));
-    const g=grupo(e,a.grupoId)||{};const o={id:a.id,brinco:a.brinco,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
-    if(pts.length){o.p0=pts[0].w;o.pf=pts[pts.length-1].w}
-    if(pts.length>=2){o.dias=dayDiff(pts[0].d,pts[pts.length-1].d);o.gmd=o.dias>0?(o.pf-o.p0)/o.dias:NaN}
-    const cs=e.consumo.map(c=>+c.valores[a.id]).filter(isFinite);o.cms=cs.length?Stats.mean(cs):NaN;
-    o.ca=isFinite(o.cms)&&o.gmd>0?o.cms/o.gmd:NaN;
-    o.pv=isFinite(o.cms)&&isFinite(o.p0)?100*o.cms/((o.p0+o.pf)/2):NaN;
-    if(isFinite(o.gmd)&&o.meta>0){o.ratio=o.gmd/o.meta;o.status=o.ratio>=1.1?"acima":o.ratio>=.9?"ok":"abaixo"}else o.status="sem";
-    return o;});
-}
-function sessionAnimalId(e,s,k){
-  if(s.animalIds&&s.animalIds[k])return s.animalIds[k];
-  const n=norm(s.animais[k]);const a=e.animais.find(a=>norm(a.brinco)===n||n.endsWith(" "+norm(a.brinco)));return a?a.id:null;
-}
-function behaviorVars(e){
-  const acc={},names={};
-  db.sessions.filter(s=>s.expId===e.id).forEach(s=>{
-    s.animais.forEach((_,k)=>{const aid=sessionAnimalId(e,s,k);if(!aid)return;
-      const M=s.marks[k]||{};const A=acc[aid]=acc[aid]||{obs:0,c:{}};
-      for(const i in M){const arr=M[i];if(!arr||!arr.length)continue;A.obs++;
-        for(const cid of arr){const c=s.comp.find(x=>x.id===cid);if(!c)continue;const key="b:"+norm(c.nome);names[key]=c.nome;A.c[key]=(A.c[key]||0)+1}}
-    });});
-  const vars=Object.keys(names).map(k=>({key:k,nome:names[k]+" (min/dia)",curto:names[k],comp:true}));
-  const by={};for(const aid in acc){by[aid]={};for(const v of vars)by[aid][v.key]=acc[aid].obs?(acc[aid].c[v.key]||0)/acc[aid].obs*1440:NaN;by[aid]._obs=acc[aid].obs}
-  return{vars,by};
-}
-function dataset(e){
-  const P=performance(e),BV=behaviorVars(e);
-  const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
-  const rows=P.map(p=>({id:p.id,brinco:p.brinco,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
-  const vars=[...base,...BV.vars].filter(v=>rows.filter(r=>isFinite(r.v[v.key])).length>=3);
-  return{rows,vars,perf:P};
-}
+/* ================= cálculos (funções em js/data.js) ================= */
+const performance=e=>Data.performance(e);
+const sessionAnimalId=Data.sessionAnimalId;
+const dataset=e=>Data.dataset(e,db.sessions);
 
 /* ================= gráficos (SVG) ================= */
 function cw(full){const cs=getComputedStyle(app);const inner=app.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);const col=full||inner<672?inner:(inner-16)/2;return Math.max(290,Math.min(full?1000:620,Math.round(col-42)))}
@@ -211,8 +187,8 @@ function heat(vars,M){const W=cw(true);
   vars.forEach((v,i)=>{s+=`<text class="lbl" x="${lw-8}" y="${lw-40+i*cell+cell/2+4}" text-anchor="end" style="font-size:11px">${esc(v.curto||v.nome)}</text>`;
     s+=`<text class="lbl" transform="translate(${lw+i*cell+cell/2+4} ${lw-48}) rotate(-50)" style="font-size:11px">${esc(v.curto||v.nome)}</text>`;});
   for(let i=0;i<n;i++)for(let j=0;j<n;j++){const r=M[i][j],x=lw+j*cell,y=lw-40+i*cell;
-    s+=`<rect x="${x+1}" y="${y+1}" width="${cell-2}" height="${cell-2}" rx="4" fill="${col(r.r)}" data-heat="${i},${j}" data-tip="${esc(vars[i].nome)} × ${esc(vars[j].nome)}\nr = ${fmt(r.r,2)} · p = ${fmtP(r.p)}" style="cursor:pointer"/>`;
-    if(i!==j&&isFinite(r.r))s+=`<text x="${x+cell/2}" y="${y+cell/2+4}" text-anchor="middle" style="font-size:10.5px;font-weight:600;fill:${Math.abs(r.r)>.55?"#fff":"var(--ink)"};pointer-events:none">${fmt(r.r,1)}${r.p<.05?"*":""}</text>`;}
+    s+=`<rect x="${x+1}" y="${y+1}" width="${cell-2}" height="${cell-2}" rx="4" fill="${col(r.r)}" data-heat="${i},${j}" data-tip="${esc(vars[i].nome)} × ${esc(vars[j].nome)}\nr = ${fmt(r.r,2)} · p = ${fmtP(r.p)}${i!==j?` · p corrigido = ${fmtP(r.q)}`:""}" style="cursor:pointer"/>`;
+    if(i!==j&&isFinite(r.r))s+=`<text x="${x+cell/2}" y="${y+cell/2+4}" text-anchor="middle" style="font-size:10.5px;font-weight:600;fill:${Math.abs(r.r)>.55?"#fff":"var(--ink)"};pointer-events:none">${fmt(r.r,1)}${r.q<.05?"*":""}</text>`;}
   return s+"</svg>";
 }
 const BAND_COLORS=[["comendo","var(--s2)","Comendo"],["ruminando","var(--s1)","Ruminando"],["ocio","var(--s3)","Ócio"],["bebendo agua","var(--s4)","Bebendo água"]];
@@ -249,12 +225,14 @@ document.getElementById("root").innerHTML=`
       <div class="expsel"><select id="expSelM" aria-label="Experimento ativo"></select></div>
       <button class="iconbtn" data-tab="ajustes" aria-label="Ajustes">${icon("gear")}</button>
     </header>
+    <div class="savebar" id="saveErr" role="alert" hidden>${icon("alert")}<span><b>As marcações não estão sendo salvas neste aparelho.</b> A memória do navegador pode estar cheia ou bloqueada (aba anônima). Não feche esta página: salve uma cópia agora.</span><button class="btn sm" id="saveErrBk">${icon("down")}Salvar cópia</button></div>
     <main id="app"></main>
   </div>
 </div>
 <nav class="tabbar" id="tabbar">${TABS.map(t=>`<button data-tab="${t[0]}"><span class="pip">${icon(t[2])}</span>${t[1]}</button>`).join("")}</nav>
 <div class="toast" id="toast" hidden></div><div class="tip" id="tip" hidden></div>`;
 const app=$("#app");
+$("#saveErrBk").onclick=()=>saveFile(`etograma-copia-${isoDay(new Date())}.json`,JSON.stringify(db),"application/json");
 
 $$("[data-tab]").forEach(b=>b.onclick=()=>go(ROOT[b.dataset.tab]));
 ["#expSelD","#expSelM"].forEach(id=>$(id).onchange=e=>{if(e.target.value==="__new")return go({name:"expForm"});db.active=e.target.value;save();render()});
@@ -349,7 +327,9 @@ document.addEventListener("click",e=>{if(e.target.closest("#toObs"))go({name:"ob
 /* ================= EXPERIMENTO (criar/editar) ================= */
 VIEWS.expForm=function(){
   const ed=view.id?db.experiments.find(x=>x.id===view.id):null;
-  const grupos=ed?ed.grupos.map(g=>({...g,brincos:ed.animais.filter(a=>a.grupoId===g.id).map(a=>a.brinco).join(", ")})):[{id:uid(),nome:"Dieta A",dieta:"",gmdMeta:1.2,brincos:""},{id:uid(),nome:"Dieta B",dieta:"",gmdMeta:1.0,brincos:""}];
+  const grupos=ed?ed.grupos:[{id:uid(),nome:"Dieta A",dieta:"",gmdMeta:1.2},{id:uid(),nome:"Dieta B",dieta:"",gmdMeta:1.0}];
+  // O animal tem dados se já foi pesado, teve consumo lançado ou aparece numa observação.
+  const hasData=aid=>!!ed&&(ed.pesagens.some(p=>isFinite(p.pesos[aid]))||ed.consumo.some(c=>isFinite(c.valores[aid]))||db.sessions.some(s=>s.expId===ed.id&&(s.animalIds||[]).includes(aid)));
   app.innerHTML=pageHead(ed?"Editar experimento":"Novo experimento",ed?esc(ed.nome):"Configure o experimento","Cada tratamento (dieta) tem a sua meta de ganho de peso. É ela que o app usa para dizer se cada animal está no esperado.",null,"Início")+`
   <form class="form" id="f">
     <div class="card">
@@ -360,38 +340,79 @@ VIEWS.expForm=function(){
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
       </div>
     </div>
-    <div class="spread"><h2>Tratamentos e animais</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
-    <div id="gs" class="stack"></div>
+    <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
+    <div id="gs" class="grid g2"></div>
+    <div class="spread"><h2>Animais <span class="muted num" id="anN"></span></h2></div>
+    <div class="card">
+      <div class="fields">
+        <label class="f">Adicionar animais <span class="hint">brincos separados por vírgula</span><input type="text" id="newB" placeholder="01, 03, 05, 07" autocomplete="off"></label>
+        <label class="f">No tratamento<select id="newG"></select></label>
+        <div class="row" style="align-self:end"><button type="button" class="btn" id="addA">${icon("plus")}Adicionar</button></div>
+      </div>
+      <div class="anlist" id="an"></div>
+      <p class="note">Corrigir um brinco ou trocar o tratamento aqui mantém as pesagens, o consumo e as observações do animal.</p>
+    </div>
     <div class="row"><button class="btn primary" type="submit">${ed?"Salvar alterações":"Criar experimento"}</button>${ed?`<button type="button" class="btn quiet danger" id="delX">Apagar experimento</button>`:""}</div>
   </form>`;
   wireBack({name:"dash"});
-  const gs=$("#gs",app);
-  const addG=g=>{const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
-    c.innerHTML=`<div class="fields"><label class="f">Tratamento<input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
-    <label class="f">Brincos dos animais <span class="hint">separados por vírgula</span><textarea data-k="brincos" rows="2" placeholder="01, 03, 05, 07">${esc(g.brincos)}</textarea></label>
+  const gs=$("#gs",app),an=$("#an",app),newB=$("#newB",app),newG=$("#newG",app);
+  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento"}));
+  const opts=sel=>groups().map(g=>`<option value="${g.id}"${g.id===sel?" selected":""}>${esc(g.nome)}</option>`).join("");
+  const rows=()=>$$("[data-aid]",an);
+  function refresh(){
+    $$("select[data-g]",an).forEach(s=>{const v=s.value;s.innerHTML=opts(v)});newG.innerHTML=opts(newG.value);
+    const ids=groups().map(g=>g.id);rows().forEach(r=>{const i=ids.indexOf($("[data-g]",r).value);$(".dot",r).style.background=`var(--s${Math.max(0,i)%4+1})`});
+    const n=rows().length;$("#anN",app).textContent=n?`· ${n}`:"";
+    const empty=$("[data-empty]",an);
+    if(!n&&!empty)an.insertAdjacentHTML("beforeend",`<p class="note" data-empty>Nenhum animal ainda. Digite os brincos acima e toque em Adicionar.</p>`);
+    if(n&&empty)empty.remove();
+  }
+  function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
+    c.innerHTML=`<div class="fields"><label class="f">Tratamento<input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
     <div><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
-    $("[data-rm]",c).onclick=()=>{if(gs.children.length>1)c.remove()};gs.appendChild(c)};
+    $('[data-k="nome"]',c).addEventListener("input",refresh);
+    $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
+      if(rows().some(r=>$("[data-g]",r).value===g.id))return toast("Mova ou remova os animais deste tratamento antes");
+      c.remove();refresh()};
+    gs.appendChild(c)}
+  function addRow(a){const r=document.createElement("div");r.className="beh";r.dataset.aid=a.id;
+    r.innerHTML=`<label class="anb"><i class="dot"></i><input type="text" data-b value="${esc(a.brinco)}" aria-label="Brinco"></label><select data-g aria-label="Tratamento do animal">${opts(a.grupoId)}</select><button type="button" class="btn sm quiet danger" aria-label="Remover animal ${esc(a.brinco)}">${icon("x")}</button>`;
+    $("[data-g]",r).onchange=refresh;
+    $("button",r).onclick=ev=>{const b=ev.currentTarget;
+      if(hasData(a.id)&&!b.dataset.armed){b.dataset.armed=1;b.textContent="Apagar?";b.setAttribute("aria-label","Confirmar: remover o animal e apagar as pesagens e o consumo dele");return}
+      r.remove();refresh()};
+    an.appendChild(r)}
+  function addFromInput(){const list=newB.value.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);if(!list.length)return;
+    const have=new Set(rows().map(r=>norm($("[data-b]",r).value)));const dup=[];
+    list.forEach(b=>{if(have.has(norm(b))){dup.push(b);return}have.add(norm(b));addRow({id:uid(),brinco:b,grupoId:newG.value})});
+    newB.value="";refresh();if(dup.length)toast(`Já estava na lista: ${dup.join(", ")}`)}
   grupos.forEach(addG);
-  $("#addG",app).onclick=()=>addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,brincos:""});
+  (ed?ed.animais:[]).forEach(addRow);refresh();
+  $("#addG",app).onclick=()=>{addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1});refresh()};
+  $("#addA",app).onclick=()=>{addFromInput();newB.focus()};
+  newB.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addFromInput()}});
   if(ed)$("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
     db.experiments=db.experiments.filter(x=>x!==ed);db.sessions=db.sessions.filter(s=>s.expId!==ed.id);db.active=db.experiments[0]?.id||null;save();toast("Experimento apagado");go({name:"dash"})};
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
+    addFromInput(); // brincos digitados sem tocar em Adicionar também entram
     const sp=db.species.find(s=>s.id===$("#xSp",app).value);
-    const G=[],A=[];
-    $$("[data-gid]",gs).forEach(c=>{const g={id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat($('[data-k="gmdMeta"]',c).value)||0};G.push(g);
-      $('[data-k="brincos"]',c).value.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean).forEach(b=>{const old=ed?.animais.find(a=>a.brinco===b);A.push({id:old?.id||uid(),brinco:b,grupoId:g.id})})});
-    if(!A.length){toast("Informe os brincos de pelo menos um animal");return}
+    const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0}));
+    const A=rows().map(r=>({id:r.dataset.aid,brinco:$("[data-b]",r).value.trim(),grupoId:$("[data-g]",r).value}));
+    if(!A.length){toast("Adicione pelo menos um animal");return}
+    if(A.some(a=>!a.brinco)){toast("Há um animal sem brinco");return}
+    const seen=new Set(),rep=A.find(a=>{const k=norm(a.brinco);if(seen.has(k))return true;seen.add(k);return false});
+    if(rep){toast(`Brinco repetido: ${rep.brinco}`);return}
     const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,grupos:G,animais:A};
-    if(ed){Object.assign(ed,data)}else{const x={id:uid(),...data,pesagens:[],consumo:[]};db.experiments.push(x);db.active=x.id}
+    if(ed){const keep=new Set(A.map(a=>a.id)),gone=ed.animais.filter(a=>!keep.has(a.id)).map(a=>a.id);
+      ed.pesagens.forEach(p=>gone.forEach(id=>delete p.pesos[id]));ed.consumo.forEach(c=>gone.forEach(id=>delete c.valores[id]));
+      Object.assign(ed,data)}
+    else{const x={id:uid(),...data,pesagens:[],consumo:[]};db.experiments.push(x);db.active=x.id}
     save();toast(ed?"Experimento salvo":"Experimento criado");go({name:"dash"});
   };
 };
 
 /* ================= OBSERVAR ================= */
-const nSlots=s=>Math.round(s.duracao*60/s.intervalo);
-const slotDate=(s,i)=>new Date(s.inicio+i*s.intervalo*60000);
 function currentSlot(s){const i=Math.floor((Date.now()-s.inicio)/(s.intervalo*60000));return(i>=0&&i<nSlots(s))?i:null}
-const marked=(s,a,i)=>(s.marks[a]&&s.marks[a][i])||[];
 function filledCount(s){let n=0;for(const a in s.marks)for(const i in s.marks[a])if(s.marks[a][i].length)n++;return n}
 
 VIEWS.obsHome=function(){
@@ -480,6 +501,7 @@ VIEWS.sheet=function(){
     <div class="sub-h">O que ${esc(s.animais[a])} está fazendo?</div>
     <div class="chips" id="chips"></div>
     <input type="text" id="obsNow" placeholder="Observação deste horário (opcional)" aria-label="Observação deste horário">
+    <p class="note">Deixe esta tela aberta: ela não apaga sozinha, mas se você trocar de app ou bloquear o celular, o aviso de vibração do próximo horário não toca.</p>
   </section>
   <section class="stack">
     <div class="spread"><h2>Planilha · ${esc(s.animais[a])}</h2><span class="note">Toque numa célula para marcar ou desmarcar</span></div>
@@ -519,8 +541,10 @@ VIEWS.sheet=function(){
   $("#exp",app).onclick=()=>exportSession(s);
   $("#vis",app).onclick=()=>go({name:"vision",sid:s.id,animal:a});
   setSlot(focus,true);lastSlot=null;tick=setInterval(updateClock,1000);updateClock();
-  try{if(!wake&&navigator.wakeLock)navigator.wakeLock.request("screen").then(w=>wake=w).catch(()=>{})}catch(err){}
+  keepAwake();
 };
+function keepAwake(){try{if(!wake&&navigator.wakeLock&&document.visibilityState==="visible")navigator.wakeLock.request("screen").then(w=>{wake=w;w.addEventListener("release",()=>{if(wake===w)wake=null})}).catch(()=>{})}catch(err){}}
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&view.name==="sheet"){delete view.slot;keepAwake();render()}});
 
 VIEWS.summary=function(){
   const s=db.sessions.find(x=>x.id===view.id);if(!s)return go({name:"obsHome"});
@@ -539,7 +563,7 @@ VIEWS.perf=function(){
   const sorted=[...P].sort((x,y)=>ord[x.status]-ord[y.status]||(x.ratio||0)-(y.ratio||0));
   const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
   const series=e.grupos.map((g,i)=>({name:g.nome,color:`var(--s${i%4+1})`,pts:pes.map(p=>{const v=e.animais.filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
-  app.innerHTML=pageHead("Desempenho","O lote está rendendo o esperado?","GMD = (peso atual − peso inicial) ÷ dias. Conversão alimentar = consumo de matéria seca ÷ GMD. Status comparado à meta de GMD de cada tratamento: abaixo de 90% é alerta.",`<button class="btn primary" id="lp">${icon("plus")}Lançar pesagem</button><button class="btn" id="lc">${icon("plus")}Lançar consumo</button><button class="btn quiet" id="ex">${icon("down")}Exportar</button>`)+`
+  app.innerHTML=pageHead("Desempenho","O lote está rendendo o esperado?","GMD = inclinação da reta do peso ao longo dos dias, usando todas as pesagens (com só duas, é (peso atual − peso inicial) ÷ dias). Conversão alimentar = consumo de matéria seca ÷ GMD. Status comparado à meta de GMD de cada tratamento: abaixo de 90% é alerta.",`<button class="btn primary" id="lp">${icon("plus")}Lançar pesagem</button><button class="btn" id="lc">${icon("plus")}Lançar consumo</button><button class="btn quiet" id="ex">${icon("down")}Exportar</button>`)+`
   <div class="stack-lg">
   <div class="tablebox"><table class="t"><thead><tr><th>Animal</th><th>Tratamento</th><th class="r">Peso inicial</th><th class="r">Peso atual</th><th class="r">Dias</th><th class="r">GMD</th><th class="r">Meta</th><th>Status</th><th class="r">CMS</th><th class="r">CMS %PV</th><th class="r">CA</th></tr></thead><tbody>
   ${sorted.map(p=>`<tr><td><b>${esc(p.brinco)}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,p.grupoId)}"></i>${esc(p.grupo)}</span></td><td class="r num">${fmt(p.p0,1)}</td><td class="r num">${fmt(p.pf,1)}</td><td class="r num">${p.dias??"—"}</td><td class="r num"><b>${fmt(p.gmd,2)}</b></td><td class="r num">${fmt(p.meta,2)}</td><td>${statusPill(p.status)}</td><td class="r num">${fmt(p.cms,1)}</td><td class="r num">${fmt(p.pv,2)}</td><td class="r num">${fmt(p.ca,2)}</td></tr>`).join("")}
@@ -602,8 +626,8 @@ VIEWS.stats=function(){
     <div id="corrOut" class="stack"></div>
   </section>
   <section class="card">
-    <div class="card-h"><div><h3>Mapa de correlações</h3><p>Todas as variáveis contra todas. Azul = negativa, laranja = positiva; * = significativa (p &lt; 0,05). Toque num quadrado para ver o gráfico.</p></div></div>
-    <div class="viz" id="heat"></div>
+    <div class="card-h"><div><h3>Mapa de correlações</h3><p>Todas as variáveis contra todas. Azul = negativa, laranja = positiva; * = significativa depois de corrigir para muitas comparações (Benjamini-Hochberg, p &lt; 0,05). Toque num quadrado para ver o gráfico.</p></div></div>
+    <div class="viz" id="heat"></div><p class="note" id="heatNote"></p>
   </section>
   <section class="stack"><h3>Dados por animal</h3>
     <div class="tablebox"><table class="t"><thead><tr><th>Animal</th><th>Tratamento</th>${V.map(v=>`<th class="r">${esc(v.nome)}</th>`).join("")}</tr></thead><tbody>
@@ -614,7 +638,7 @@ VIEWS.stats=function(){
     const unit=(v.nome.match(/\(([^)]+)\)/)||[])[1]||"";const best=[...res.desc].sort((a,b)=>b.media-a.media)[0];
     const sig=res.p<.05;
     $("#anovaOut",app).innerHTML=res.desc.length<2?`<p class="muted">Precisa de pelo menos 2 tratamentos com dados.</p>`:`
-      <div class="verdict${sig?" sig":""}">${sig?`Os tratamentos <b>diferem</b> em ${esc(v.nome)} (p = ${fmtP(res.p)}). Maior média: <b>${esc(best.nome)}</b>, ${fmt(best.media,2)} ${esc(unit)}.`:`<b>Não houve diferença significativa</b> entre os tratamentos em ${esc(v.nome)} (p = ${fmtP(res.p)}).`}</div>
+      <div class="verdict${sig?" sig":""}">${sig?`Os tratamentos <b>diferem</b> em ${esc(v.nome)} (p = ${fmtP(res.p)}). Maior média: <b>${esc(best.nome)}</b>, ${fmt(best.media,2)} ${esc(unit)}.`:`<b>Não houve diferença significativa</b> entre os tratamentos em ${esc(v.nome)} (p = ${fmtP(res.p)}).${res.N<30?` Com ${res.N} animais, isso não prova que os tratamentos são iguais: diferenças pequenas podem passar despercebidas.`:""}`}</div>
       <div class="statline"><div><b>${fmt(res.F,2)}</b><span>F</span></div><div><b>${res.dfb}; ${res.dfw}</b><span>gl</span></div><div><b>${fmtP(res.p)}</b><span>p</span></div><div><b>${fmt(res.cv,1)}%</b><span>CV</span></div></div>
       <div class="viz">${meanBars(res.desc.map(d=>({...d,nome:d.nome})),res.desc.map(d=>cols[e.grupos.findIndex(g=>g.nome===d.nome)]),unit)}</div>
       <div class="tablebox"><table class="t"><thead><tr><th>Tratamento</th><th class="r">n</th><th class="r">Média</th><th class="r">Desvio-padrão</th><th class="r">Erro-padrão</th></tr></thead><tbody>${res.desc.map(d=>`<tr><td>${esc(d.nome)}</td><td class="r num">${d.n}</td><td class="r num">${fmt(d.media,2)}</td><td class="r num">${fmt(d.dp,2)}</td><td class="r num">${fmt(d.ep,2)}</td></tr>`).join("")}</tbody></table></div>
@@ -629,7 +653,11 @@ VIEWS.stats=function(){
       <div class="viz">${scatter(rows.map(r=>({x:r.v[vx.key],y:r.v[vy.key],color:gColor(e,r.grupoId),tip:`Animal ${r.brinco} · ${r.grupo}\n${vx.nome}: ${fmt(r.v[vx.key],2)}\n${vy.nome}: ${fmt(r.v[vy.key],2)}`})),c,vx.nome,vy.nome)}</div>
       <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:var(--s${i%4+1});border-radius:50%"></i>${esc(g.nome)}</span>`).join("")}<span><svg width="22" height="8"><line x1="0" x2="22" y1="4" y2="4" stroke="var(--ink-2)" stroke-width="2" stroke-dasharray="5 4"/></svg>Reta de regressão</span></div>`;}
   function doHeat(){const M=V.map(a=>V.map(b=>{const rows=D.rows.filter(r=>isFinite(r.v[a.key])&&isFinite(r.v[b.key]));return Stats.pearson(rows.map(r=>r.v[a.key]),rows.map(r=>r.v[b.key]))}));
-    statState.heat=V.map((a,i)=>V.map((b,j)=>j>i&&M[i][j].p<.05?`${a.nome} × ${b.nome}: r=${fmt(M[i][j].r,2)}, p=${fmtP(M[i][j].p)}`:null)).flat().filter(Boolean);
+    // Muitos pares testados de uma vez: corrige o p (Benjamini-Hochberg) para não marcar correlações que são só acaso.
+    const up=[];V.forEach((_,i)=>V.forEach((_,j)=>{if(j>i)up.push([i,j])}));const q=Stats.bh(up.map(([i,j])=>M[i][j].p));
+    up.forEach(([i,j],k)=>{M[i][j]={...M[i][j],q:q[k]};M[j][i]={...M[j][i],q:q[k]}});
+    statState.heat=up.filter(([i,j])=>M[i][j].q<.05).map(([i,j])=>`${V[i].nome} × ${V[j].nome}: r=${fmt(M[i][j].r,2)}, p corrigido=${fmtP(M[i][j].q)}`);
+    $("#heatNote",app).textContent=`${up.length} pares testados · ${statState.heat.length} significativo(s) após a correção.`;
     $("#heat",app).innerHTML=heat(V,M);
     $$("[data-heat]",app).forEach(r=>r.addEventListener("click",()=>{const[i,j]=r.dataset.heat.split(",").map(Number);statState.x=V[j].key;statState.y=V[i].key;$("#sx",app).value=statState.x;$("#sy",app).value=statState.y;doCorr();$("#corrOut",app).closest(".card").scrollIntoView({behavior:"smooth",block:"start"})}));}
   $("#sv",app).onchange=ev=>{statState.v=ev.target.value;doAnova()};
@@ -651,7 +679,7 @@ ${tabela}
 RESULTADOS CALCULADOS:
 - ANOVA para ${an?.v}: F=${fmt(an?.res.F,2)}, p=${fmtP(an?.res.p)}; médias: ${an?.res.desc.map(d=>`${d.nome} ${fmt(d.media,2)} ± ${fmt(d.ep,2)} (EP)`).join("; ")}
 - Correlação ${co?.x} × ${co?.y}: r=${fmt(co?.c.r,3)}, p=${fmtP(co?.c.p)}, n=${co?.c.n}
-- Correlações significativas no mapa: ${statState.heat.slice(0,14).join(" | ")||"nenhuma"}
+- Correlações significativas no mapa (p corrigido por Benjamini-Hochberg): ${statState.heat.slice(0,14).join(" | ")||"nenhuma"}
 
 Escreva de 5 a 7 tópicos curtos (use "• " no início de cada um, sem markdown, sem negrito): o que os resultados mostram sobre desempenho, sobre comportamento (ruminação, ingestão, ócio) e a ligação com a dieta; quais animais merecem atenção e por quê; e um último tópico com limitações (tamanho da amostra, poucos dias de observação, correlação não é causa). Não invente números que não estão acima.`;
       try{await cl.sample(prompt,{signal:ctl.signal,onText:({text})=>{out.textContent=text}})}
@@ -666,6 +694,8 @@ function claude(){if(_claude)return _claude;
   _claude=(async()=>{const o={};try{if(window.claude&&window.claude.use){const[s,d]=await Promise.all([window.claude.use("sample"),window.claude.use("downloads")]);o.sample=s;o.downloads=d;if(s){try{o.limits=await s.limits()}catch(e){}}}}catch(e){}return o})();
   return _claude}
 let vis={file:null,frames:[],results:[]};
+// Libera a memória das imagens dos quadros anteriores.
+function clearVisResults(){vis.results.forEach(r=>{try{URL.revokeObjectURL(r.url)}catch(e){}});vis.results=[]}
 VIEWS.vision=function(){
   const e=exp();
   const sessions=db.sessions.filter(s=>!e||s.expId===e.id||!s.expId).sort((a,b)=>b.inicio-a.inicio);
@@ -702,13 +732,13 @@ VIEWS.vision=function(){
   const tb=$("#toObs2",app);if(tb)tb.onclick=()=>go({name:"obsHome"});
   if(!sessions.length)return;
   const getS=()=>db.sessions.find(s=>s.id===$("#vs",app).value);
-  $("#vs",app).onchange=ev=>{view.sid=ev.target.value;view.animal=0;vis.results=[];render()};
+  $("#vs",app).onchange=ev=>{view.sid=ev.target.value;view.animal=0;clearVisResults();render()};
   let duration=0;
   const calc=()=>{const s=getS(),iv=+$("#vi",app).value;const n=vis.file&&vis.file.type.startsWith("image/")?1:Math.min(60,Math.floor(duration/iv)+1);
     $("#vCalc",app).textContent=vis.file?(vis.file.type.startsWith("image/")?"1 foto será analisada.":`${n} quadros serão analisados${Math.floor(duration/iv)+1>60?" (limite de 60 por vez)":""}. Cada quadro vira a marcação do horário correspondente, em blocos de ${s.intervalo} min.`):""};
   $("#vi",app).onchange=calc;
-  const setFile=f=>{if(!f)return;vis.file=f;vis.results=[];$("#resCard",app).hidden=true;
-    if(f.type.startsWith("video/")){const v=document.createElement("video");v.preload="metadata";v.muted=true;v.src=URL.createObjectURL(f);v.onloadedmetadata=()=>{duration=v.duration||0;$("#vidInfo",app).innerHTML=`<div class="callout">${icon("film")}<span><b>${esc(f.name)}</b> · ${fmtDur(duration/60)} de vídeo</span></div>`;calc()};v.onerror=()=>{$("#vidInfo",app).innerHTML=`<div class="callout bad">${icon("alert")}<span>Não consegui abrir esse vídeo neste navegador. Tente MP4 (H.264) ou WebM.</span></div>`}}
+  const setFile=f=>{if(!f)return;vis.file=f;clearVisResults();$("#resCard",app).hidden=true;
+    if(f.type.startsWith("video/")){const v=document.createElement("video");v.preload="metadata";v.muted=true;v.src=URL.createObjectURL(f);v.onloadedmetadata=()=>{duration=isFinite(v.duration)?v.duration:0;URL.revokeObjectURL(v.src);$("#vidInfo",app).innerHTML=`<div class="callout">${icon("film")}<span><b>${esc(f.name)}</b> · ${fmtDur(duration/60)} de vídeo</span></div>`;calc()};v.onerror=()=>{$("#vidInfo",app).innerHTML=`<div class="callout bad">${icon("alert")}<span>Não consegui abrir esse vídeo neste navegador. Tente MP4 (H.264) ou WebM.</span></div>`}}
     else{duration=0;$("#vidInfo",app).innerHTML=`<div class="callout">${icon("film")}<span><b>${esc(f.name)}</b> · foto</span></div>`;calc()}
     $("#run",app).disabled=false;};
   $("#vf",app).onchange=ev=>setFile(ev.target.files[0]);
@@ -725,7 +755,7 @@ VIEWS.vision=function(){
     try{
       prog.innerHTML=`<span class="spin"></span> Tirando quadros…`;
       const frames=vis.file.type.startsWith("image/")?[{t:0,blob:await shrink(vis.file)}]:await extractFrames(vis.file,iv,60,ctl.signal,(k,n)=>prog.innerHTML=`<span class="spin"></span> Tirando quadros… ${k}/${n}`);
-      vis.results=frames.map(f=>({t:f.t,clock:t0+f.t*1000,url:URL.createObjectURL(f.blob),blob:f.blob,comps:[],conf:null,nota:"",status:"wait"}));
+      clearVisResults();vis.results=frames.map(f=>({t:f.t,clock:t0+f.t*1000,url:URL.createObjectURL(f.blob),blob:f.blob,comps:[],conf:null,nota:"",status:"wait"}));
       vis.sid=s.id;vis.animal=a;$("#resCard",app).hidden=false;paintResults();
       const max=Math.max(1,Math.min(6,cl.limits.images.maxCount||1));const names=s.comp.map(c=>c.nome);
       for(let i=0;i<vis.results.length;i+=max){if(ctl.signal.aborted)break;
@@ -744,8 +774,9 @@ Responda apenas com JSON: um array com ${batch.length} objeto(s), na ordem das i
       prog.textContent=vis.results.some(r=>r.status==="done")?"Análise concluída. Revise e aplique.":"";
     }catch(err){prog.textContent=err&&err.message==="abort"?"Interrompido.":"Não consegui ler o vídeo. Tente outro arquivo (MP4 ou WebM)."}
     finally{run.disabled=false;stop.hidden=true}};
-  $("#apply",app).onclick=()=>{const s=db.sessions.find(x=>x.id===vis.sid);if(!s)return;const a=vis.animal;let n=0;s.marks[a]=s.marks[a]||{};
-    vis.results.filter(r=>r.status==="done"&&r.comps.length).forEach(r=>{const i=Math.floor((r.clock-s.inicio)/(s.intervalo*60000));if(i<0||i>=nSlots(s))return;s.marks[a][i]=[...new Set([...(s.marks[a][i]||[]),...r.comps])];n++});
+  // Um quadro por horário (o primeiro dentro dele, como na varredura instantânea). A marcação revisada substitui a do horário.
+  $("#apply",app).onclick=()=>{const s=db.sessions.find(x=>x.id===vis.sid);if(!s)return;const a=vis.animal;let n=0;s.marks[a]=s.marks[a]||{};const used=new Set();
+    vis.results.filter(r=>r.status==="done"&&r.comps.length).sort((x,y)=>x.clock-y.clock).forEach(r=>{const i=Math.floor((r.clock-s.inicio)/(s.intervalo*60000));if(i<0||i>=nSlots(s)||used.has(i))return;used.add(i);s.marks[a][i]=[...r.comps];n++});
     save();if(!n){toast("Nenhum quadro caiu dentro do horário dessa observação. Confira o horário de início do vídeo.");return}
     toast(`${n} horário(s) preenchido(s) na planilha`);go({name:"sheet",id:s.id,animal:a,slot:Math.floor((vis.results[0].clock-s.inicio)/(s.intervalo*60000))})};
   function paintResults(){const s=db.sessions.find(x=>x.id===vis.sid)||getS();const box=$("#frames",app);if(!box)return;$("#resCard",app).hidden=!vis.results.length;
@@ -755,16 +786,17 @@ Responda apenas com JSON: um array com ${batch.length} objeto(s), na ordem das i
     $$("[data-f]",box).forEach(b=>b.onclick=()=>{const r=vis.results[+b.dataset.f];const c=b.dataset.c;r.comps=r.comps.includes(c)?r.comps.filter(x=>x!==c):[...r.comps,c];paintResults()});
     $$("[data-more]",box).forEach(b=>b.onclick=()=>{const r=vis.results[+b.dataset.more];r.showAll=!r.showAll;paintResults()});}
 };
-function shrink(blobOrFile,maxW=1024){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{const k=Math.min(1,maxW/img.naturalWidth),c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("img")),"image/jpeg",.82)};img.onerror=()=>rej(new Error("img"));img.src=URL.createObjectURL(blobOrFile)})}
+function shrink(blobOrFile,maxW=1024){return new Promise((res,rej)=>{const img=new Image();img.onload=()=>{URL.revokeObjectURL(img.src);const k=Math.min(1,maxW/img.naturalWidth),c=document.createElement("canvas");c.width=Math.round(img.naturalWidth*k);c.height=Math.round(img.naturalHeight*k);c.getContext("2d").drawImage(img,0,0,c.width,c.height);c.toBlob(b=>b?res(b):rej(new Error("img")),"image/jpeg",.82)};img.onerror=()=>rej(new Error("img"));img.src=URL.createObjectURL(blobOrFile)})}
 async function extractFrames(file,every,max,signal,onProg){
   const v=document.createElement("video");v.muted=true;v.playsInline=true;v.preload="auto";v.src=URL.createObjectURL(file);
   await new Promise((res,rej)=>{v.onloadeddata=res;v.onerror=()=>rej(new Error("video"))});
+  if(!isFinite(v.duration)){URL.revokeObjectURL(v.src);throw new Error("video")}
   const times=[];for(let t=0;t<=v.duration&&times.length<max;t+=every)times.push(Math.min(t,Math.max(0,v.duration-.05)));
   const k=Math.min(1,960/v.videoWidth),c=document.createElement("canvas");c.width=Math.round(v.videoWidth*k);c.height=Math.round(v.videoHeight*k);const ctx=c.getContext("2d");
   const out=[];for(let i=0;i<times.length;i++){if(signal.aborted)throw new Error("abort");
     await new Promise(res=>{v.onseeked=res;v.currentTime=times[i]});ctx.drawImage(v,0,0,c.width,c.height);
     const blob=await new Promise(res=>c.toBlob(res,"image/jpeg",.8));out.push({t:times[i],blob});onProg&&onProg(i+1,times.length)}
-  return out;
+  URL.revokeObjectURL(v.src);return out;
 }
 
 /* ================= AJUSTES ================= */
@@ -777,15 +809,22 @@ VIEWS.settings=function(){
       <label class="btn" for="csvIn" style="align-self:flex-start">${icon("up")}Importar planilhas (.csv)</label><input type="file" id="csvIn" accept=".csv,text/csv" multiple hidden><p class="note" id="csvMsg"></p></section>
     <section class="card"><div class="card-h"><div><h3>Cópia de segurança</h3><p>Salve tudo num arquivo e restaure em outro aparelho.</p></div></div>
       <div class="row"><button class="btn" id="bk">${icon("down")}Salvar cópia</button><label class="btn" for="bkIn">${icon("up")}Restaurar cópia</label><input type="file" id="bkIn" accept=".json,application/json" hidden></div><p class="note" id="bkMsg"></p></section>
+    ${badCopy()?`<section class="card"><div class="card-h"><div><h3>Dados antigos não lidos</h3><p>Ao abrir, o app encontrou dados salvos que não conseguiu ler (arquivo corrompido ou de outra versão). Eles foram guardados sem alteração. Baixe o arquivo e envie para quem cuida do app.</p></div></div>
+      <div class="row"><button class="btn" id="badDl">${icon("down")}Baixar dados não lidos</button><button class="btn quiet danger" id="badRm">Descartar</button></div></section>`:""}
     <section class="card"><div class="card-h"><div><h3>Limpar</h3><p>Apaga dados deste aparelho.</p></div></div>
       <div class="row">${hasEx?`<button class="btn" id="rmEx">Apagar dados de exemplo</button>`:`<button class="btn" id="addEx">Carregar exemplo</button>`}<button class="btn quiet danger" id="wipe">Apagar tudo</button></div></section>
   </div>
   <p class="note" style="margin-top:22px">Etograma · protótipo. Os dados ficam salvos só neste aparelho e navegador.</p>`;
   $("#spc",app).onclick=()=>go({name:"species"});
   $("#bk",app).onclick=()=>saveFile(`etograma-copia-${isoDay(new Date())}.json`,JSON.stringify(db),"application/json");
-  $("#bkIn",app).onchange=async ev=>{const f=ev.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(d.v!==2||!d.experiments)throw 0;db=d;save();toast("Cópia restaurada");go({name:"dash"})}catch(err){$("#bkMsg",app).textContent="Esse arquivo não é uma cópia do Etograma."}};
-  $("#csvIn",app).onchange=async ev=>{const fs=[...ev.target.files];let n=0,errs=[];for(const f of fs){try{n+=importCSV(await f.text())}catch(err){errs.push(f.name)}}save();
-    $("#csvMsg",app).textContent=`${n} observação(ões) importada(s)${errs.length?`. Não reconheci: ${errs.join(", ")}`:""}.`;if(n)toast("Planilhas importadas")};
+  $("#bkIn",app).onchange=async ev=>{const f=ev.target.files[0],msg=$("#bkMsg",app);ev.target.value="";if(!f)return;let d;
+    try{d=JSON.parse(await f.text());if(d.v!==2||!Array.isArray(d.experiments)||!Array.isArray(d.sessions))throw 0}catch(err){msg.textContent="Esse arquivo não é uma cópia do Etograma.";return}
+    msg.innerHTML=`Cópia com ${d.experiments.length} experimento(s) e ${d.sessions.length} observação(ões). Isso substitui tudo o que está neste aparelho. <button class="btn sm primary" id="bkOk">Substituir</button>`;
+    $("#bkOk",app).onclick=()=>{db=d;if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Cópia restaurada");go({name:"dash"})}};
+  const bd=$("#badDl",app);if(bd){bd.onclick=()=>saveFile(`etograma-dados-nao-lidos-${isoDay(new Date())}.json`,badCopy(),"application/json");
+    $("#badRm",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar descarte?";return}try{localStorage.removeItem(KEYBAD)}catch(e){}render()}}
+  $("#csvIn",app).onchange=async ev=>{const fs=[...ev.target.files];ev.target.value="";let n=0,dup=0,errs=[];for(const f of fs){try{const r=importCSV(await f.text());n+=r.added;dup+=r.dup}catch(err){errs.push(f.name)}}save();
+    $("#csvMsg",app).textContent=`${n} observação(ões) importada(s)${dup?` · ${dup} já existia(m) e foi(ram) ignorada(s)`:""}${errs.length?`. Não reconheci: ${errs.join(", ")}`:""}.`;if(n)toast("Planilhas importadas")};
   const rm=$("#rmEx",app);if(rm)rm.onclick=()=>{db.experiments=db.experiments.filter(x=>!x.exemplo);db.sessions=db.sessions.filter(s=>!s.exemplo);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Exemplo apagado");render()};
   const ad=$("#addEx",app);if(ad)ad.onclick=()=>{const ex=exampleData(db.species);db.experiments.push(ex.exp);db.sessions.push(...ex.sessions);db.active=ex.exp.id;save();toast("Exemplo carregado");go({name:"dash"})};
   $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,species:defaultSpecies(),experiments:[],sessions:[],active:null};save();toast("Tudo apagado");go({name:"dash"})};
@@ -807,33 +846,12 @@ VIEWS.species=function(){
 };
 
 /* ================= arquivos ================= */
-function toCSV(rows){return"﻿"+rows.map(r=>r.map(v=>{if(typeof v==="number")v=isFinite(v)?String(+v.toFixed(4)).replace(".",","):"";v=String(v??"");return/[;"\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v}).join(";")).join("\r\n")}
-function sessionCSV(s){const head=["Experimento","Espécie","Observador","Animal","Data","Hora","Intervalo (min)",...s.comp.map(c=>c.nome),"Observação"];const rows=[head];
-  s.animais.forEach((n,a)=>{for(let i=0;i<nSlots(s);i++){const d=slotDate(s,i),mk=marked(s,a,i);rows.push([s.nome,s.especie,s.observador,n,dmy(d),hhmm(d),String(s.intervalo),...s.comp.map(c=>mk.includes(c.id)?"1":"0"),(s.obs[a]||{})[i]||""])}});return toCSV(rows)}
-function exportSession(s){saveFile((s.nome+" - "+(s.observador||"observador")+" - "+s.animais.join(", ")).replace(/[\\/:*?"<>|]/g,"-")+".csv",sessionCSV(s))}
-function parseCSV(txt){txt=txt.replace(/^﻿/,"");const rows=[];let row=[],f="",q=false;for(let i=0;i<txt.length;i++){const ch=txt[i];
-  if(q){if(ch==='"'){if(txt[i+1]==='"'){f+='"';i++}else q=false}else f+=ch}
-  else if(ch==='"')q=true;else if(ch===";"){row.push(f);f=""}else if(ch==="\n"){row.push(f.replace(/\r$/,""));rows.push(row);row=[];f=""}else f+=ch}
-  if(f||row.length){row.push(f.replace(/\r$/,""));rows.push(row)}return rows.filter(r=>r.some(x=>x!==""))}
+function exportSession(s){saveFile((s.nome+" - "+(s.observador||"observador")+" - "+s.animais.join(", ")).replace(/[\/:*?"<>|]/g,"-")+".csv",sessionCSV(s))}
+// Importa as observações de um CSV; ignora as que já existem (mesmo observador, animais e horário de início).
 function importCSV(txt){
-  const R=parseCSV(txt);const h=R[0].map(norm);const ix=n=>h.indexOf(norm(n));
-  const iE=ix("Experimento"),iS=ix("Espécie"),iO=ix("Observador"),iA=ix("Animal"),iD=ix("Data"),iH=ix("Hora"),iI=ix("Intervalo (min)"),iObs=ix("Observação");
-  if(iA<0||iD<0||iH<0)throw new Error("fmt");
-  const first=Math.max(iH,iI)+1,last=iObs>=0?iObs:R[0].length;const compNames=R[0].slice(first,last);
-  const e=exp();const spName=R[1][iS]||e?.especie||"Animal";const sp=db.species.find(x=>norm(x.nome)===norm(spName));
-  const comp=compNames.map(n=>{const ref=sp?.comp.find(c=>norm(c.nome)===norm(n));return{id:uid(),nome:n,tipo:ref?.tipo||"comum"}});
-  const toTs=(d,t)=>{const[D,M,Y]=d.split("/").map(Number),[hh,mm]=t.split(":").map(Number);return new Date(Y,M-1,D,hh,mm).getTime()};
-  const groups={};R.slice(1).forEach(r=>{const k=(r[iE]||"")+"|"+(r[iO]||"");(groups[k]=groups[k]||[]).push(r)});
-  let n=0;for(const k in groups){const rows=groups[k];const animais=[...new Set(rows.map(r=>r[iA]))];
-    const t0=Math.min(...rows.map(r=>toTs(r[iD],r[iH])));const a0=rows.filter(r=>r[iA]===animais[0]).map(r=>toTs(r[iD],r[iH])).sort((a,b)=>a-b);
-    const intervalo=iI>=0&&+rows[0][iI]?+rows[0][iI]:(a0.length>1?Math.round((a0[1]-a0[0])/60000):5);
-    const tEnd=Math.max(...rows.map(r=>toTs(r[iD],r[iH])));const duracao=Math.max(intervalo/60,(tEnd-t0)/36e5+intervalo/60);
-    const s={id:uid(),expId:e?e.id:null,nome:rows[0][iE]||"Observação importada",especie:sp?.nome||spName,comp,observador:rows[0][iO]||"",animais,animalIds:null,inicio:t0,intervalo,duracao,marks:{},obs:{}};
-    if(e)s.animalIds=animais.map((_,i)=>sessionAnimalId(e,s,i));
-    animais.forEach((_,i)=>{s.marks[i]={};s.obs[i]={}});
-    rows.forEach(r=>{const a=animais.indexOf(r[iA]),i=Math.round((toTs(r[iD],r[iH])-t0)/(intervalo*60000));const m=comp.filter((c,j)=>r[first+j]==="1"||norm(r[first+j])==="x").map(c=>c.id);if(m.length)s.marks[a][i]=m;if(iObs>=0&&r[iObs])s.obs[a][i]=r[iObs]});
-    db.sessions.push(s);n++}
-  return n;
+  const have=new Set(db.sessions.map(Data.sessionSignature));let added=0,dup=0;
+  for(const s of Data.sessionsFromCSV(txt,{species:db.species,exp:exp()})){const k=Data.sessionSignature(s);if(have.has(k)){dup++;continue}have.add(k);db.sessions.push(s);added++}
+  return{added,dup};
 }
 async function saveFile(name,data,mime="text/csv"){
   const cl=await claude();

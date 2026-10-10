@@ -32,6 +32,12 @@ const Stats=(function(){
     for(let i=0;i<k;i++)for(let j=i+1;j<k;j++){const a=G[i],b=G[j];const t=(mean(a.vals)-mean(b.vals))/Math.sqrt(msw*(1/a.vals.length+1/b.vals.length));const pr=Math.min(1,pT(Math.abs(t),dfw)*m);pares.push({a:a.nome,b:b.nome,dif:mean(a.vals)-mean(b.vals),p:pr})}
     return{desc,k,N,ssb,ssw,dfb,dfw,msb,msw,F,p,pares,cv:100*Math.sqrt(msw)/gm};
   }
+  // Benjamini-Hochberg: corrige p para muitas comparações ao mesmo tempo (devolve q na mesma ordem; NaN fica NaN).
+  function bh(ps){
+    const idx=ps.map((p,i)=>[p,i]).filter(([p])=>isFinite(p)).sort((a,b)=>a[0]-b[0]);const m=idx.length,q=ps.map(()=>NaN);
+    let min=1;for(let k=m-1;k>=0;k--){min=Math.min(min,idx[k][0]*m/(k+1));q[idx[k][1]]=min}
+    return q;
+  }
   function niceTicks(min,max,count){
     if(!isFinite(min)||!isFinite(max))return[0,1];
     if(min===max){const d=Math.abs(min)||1;min-=d*.1;max+=d*.1}
@@ -39,6 +45,6 @@ const Stats=(function(){
     const step=(f<1.5?1:f<3?2:f<7?5:10)*mag;const lo=Math.floor(min/step)*step,hi=Math.ceil(max/step)*step;
     const out=[];for(let v=lo;v<=hi+step/2;v+=step)out.push(+v.toFixed(10));return out;
   }
-  return{lgamma,ibeta,pT,pF,mean,sd,se,pearson,anova,niceTicks};
+  return{lgamma,ibeta,pT,pF,mean,sd,se,pearson,anova,bh,niceTicks};
 })();
 if(typeof module!=="undefined")module.exports=Stats;

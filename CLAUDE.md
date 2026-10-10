@@ -34,11 +34,15 @@ Além disso: **Início** (painel do experimento, alertas, gráfico "Orçamento d
 ## Arquitetura atual
 
 - HTML/CSS/JS puro, sem framework e sem build. Abra `index.html` (ou use o Live Server do VS Code).
-- `js/stats.js`: funções estatísticas puras (beta incompleta, p de t e F, Pearson, ANOVA, niceTicks). Testadas em `tests/stats.test.js`.
-- `js/app.js`: o app inteiro (estado, telas, gráficos SVG feitos à mão, importação/exportação).
+- `js/stats.js`: funções estatísticas puras (beta incompleta, p de t e F, Pearson, ANOVA, Benjamini-Hochberg, niceTicks). Testadas em `tests/stats.test.js`.
+- `js/data.js`: cálculos puros de dados (desempenho/GMD por regressão, comportamento em min/dia, CSV de ida e volta, assinatura para não duplicar importação). Testados em `tests/data.test.js`. **Lógica nova de dados vai aqui, com teste**, não no `app.js`.
+- `js/app.js`: telas, gráficos SVG feitos à mão, armazenamento e integração com o Claude.
   Roteador simples: `go({name:...})` → `VIEWS[name]()` desenha em `#app`.
 - `styles.css`: design system em tokens CSS (claro/escuro).
 - Dados em `localStorage` (chave `etograma.v2`). Migra a chave antiga `etograma.v1` do primeiro protótipo.
+  - Se `etograma.v2` não puder ser lido, o conteúdo original é copiado para `etograma.ilegivel` antes de qualquer gravação (Ajustes oferece baixar/descartar).
+  - Se `save()` falhar (memória cheia, aba anônima), aparece a barra vermelha `#saveErr` com botão de cópia. Nunca engolir erro de gravação em silêncio.
+  - Outra aba que salva dispara o evento `storage` e esta aba recarrega o `db` (não sobrescreve o trabalho da outra).
 - Na primeira abertura carrega um **experimento de exemplo** (dados simulados, marcados `exemplo: true`).
 - `scripts/build-single.js` gera `dist/etograma.html` (arquivo único). É o formato usado para publicar como Artifact no Claude.
 
@@ -73,12 +77,18 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 }
 ```
 
+Animais têm `id` estável: o formulário do experimento edita brinco/tratamento por `id` (corrigir "7" → "07" não perde pesagens). Remover um animal com dados pede confirmação e apaga os pesos/consumo dele.
+
+GMD = inclinação da regressão linear peso × dias com todas as pesagens (com 2 pesagens é igual a (final − inicial)/dias).
+
 Comportamento → variável por animal: (nº de marcações do comportamento ÷ nº de horários marcados) × 1440 = min/dia.
 Comportamentos são casados entre sessões pelo **nome normalizado** (sem acento/minúsculas).
 
 CSV exportado por observação (separador `;`, BOM UTF-8 para o Excel):
 `Experimento;Espécie;Observador;Animal;Data;Hora;Intervalo (min);<comportamentos 1/0...>;Observação`.
-A importação em Ajustes lê esse mesmo formato.
+A importação em Ajustes lê esse mesmo formato (também aceita `,`/tab e datas ISO, caso o Excel tenha regravado) e ignora observações que já existem (mesmo observador + animais + início + intervalo). Texto que começa com `= + - @` é exportado com `'` na frente (proteção contra fórmula no Excel) e o `'` é removido na importação.
+
+Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) e a marcação revisada **substitui** a do horário. Mapa de correlações: `*` usa p corrigido por Benjamini-Hochberg.
 
 ## Decisões de design
 
@@ -101,6 +111,6 @@ A importação em Ajustes lê esse mesmo formato.
 
 ## Comandos
 
-- `npm test`: testa as funções estatísticas contra valores de referência.
+- `npm test`: testa `stats.js` (valores de referência) e `data.js` (desempenho, min/dia, CSV).
 - `npm run build`: gera `dist/etograma.html` (arquivo único).
 - Rodar: abrir `index.html` no navegador ou usar a extensão Live Server.

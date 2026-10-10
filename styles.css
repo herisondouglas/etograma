@@ -249,3 +249,10 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 .spin{width:16px;height:16px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:sp .8s linear infinite;display:inline-block}
 @keyframes sp{to{transform:rotate(360deg)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+.anlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:8px 18px}
+.anb{display:flex;align-items:center;gap:8px;min-width:0}
+.anb .dot{border-radius:50%}
+.savebar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 16px 0;padding:12px 16px;border-radius:var(--r-sm);background:var(--bad-2);color:var(--ink);font-size:.9rem}
+.savebar svg{width:20px;height:20px;stroke:var(--bad);flex:none}
+.savebar span{flex:1;min-width:220px}
+@media (min-width:960px){.savebar{margin:20px 40px 0}}
