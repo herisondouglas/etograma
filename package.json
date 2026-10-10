@@ -5,6 +5,7 @@
   "description": "Registro de análise comportamental de animais, desempenho e estatística automática.",
   "scripts": {
     "test": "node tests/stats.test.js && node tests/data.test.js",
+    "dev": "node scripts/dev-server.js",
     "build": "node scripts/build-single.js"
   }
 }

@@ -12,6 +12,7 @@ e marcar comportamentos a partir de vídeo com IA.
 Não precisa instalar nada. Para os testes e o build é preciso ter o Node.js:
 
 ```bash
+npm run dev     # abre em http://localhost:5173 (npm run dev -- --host para testar no celular)
 npm test        # confere estatística, desempenho e CSV
 npm run build   # gera dist/etograma.html (tudo num arquivo só)
 ```

@@ -115,6 +115,7 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 
 ## Comandos
 
+- `npm run dev`: servidor local sem dependências (`scripts/dev-server.js`) em http://localhost:5173; `npm run dev -- --host` abre na rede Wi-Fi para testar no celular.
 - `npm test`: testa `stats.js` (valores de referência) e `data.js` (desempenho, min/dia, CSV).
 - `npm run build`: gera `dist/etograma.html` (arquivo único).
 - Rodar: abrir `index.html` no navegador ou usar a extensão Live Server.
