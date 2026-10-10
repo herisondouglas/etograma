@@ -281,6 +281,7 @@ function render(){
   clearInterval(tick);tick=null;cleanup.forEach(f=>{try{f()}catch(e){}});cleanup=[];
   if(view.name!=="sheet"&&wake){try{wake.release()}catch(e){}wake=null}
   renderChrome();
+  document.body.classList.toggle("auth",view.name==="login");
   (VIEWS[view.name]||VIEWS.dash)();
 }
 const pageHead=(eyebrow,title,sub,actions,back)=>`<div class="page-h">${back?`<button class="crumb" data-back>${icon("back")}${esc(back)}</button>`:""}<span class="eyebrow">${eyebrow}</span><h1>${title}</h1>${sub?`<p class="ink2" style="max-width:62ch">${sub}</p>`:""}${actions?`<div class="row">${actions}</div>`:""}</div>`;
@@ -1015,13 +1016,17 @@ async function cloudStart(){
   try{await loadScript(SUPA_JS)}catch(e){Cloud.status="offline";paintSync();return} // sem internet: tenta de novo quando voltar
   if(!Cloud.client){
     Cloud.client=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"etograma.auth"}});
-    Cloud.client.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY"){Cloud.recovery=true;go({name:"settings"})}setTimeout(()=>setUser(session?.user||null),0)});
+    Cloud.client.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY"){Cloud.recovery=true;go({name:"login"})}setTimeout(()=>setUser(session?.user||null),0)});
   }
   const{data}=await Cloud.client.auth.getSession();setUser(data.session?.user||null);
+  // ao abrir o app sem conta, mostra a tela de entrar (uma vez; "Continuar sem conta" é lembrado)
+  let skip=null;try{skip=localStorage.getItem(SEMCONTA)}catch(e){}
+  if(!data.session&&!skip&&!Cloud.autoShown&&view.name==="dash"){Cloud.autoShown=true;go({name:"login"})}
 }
 function setUser(u){const prev=Cloud.user?.id;Cloud.user=u;if(u)Cloud.mode="in"; // depois de sair, o cartão volta em "Entrar"
   
   if(!u){Cloud.status="out";unsubscribe();paintSync();if(view.name==="settings")render();return}
+  if(view.name==="login"&&!Cloud.recovery)go({name:"dash"});
   if(prev===u.id)return;
   // outra conta neste aparelho: tira daqui o que veio da conta anterior (continua salvo no banco)
   if(syncState.user&&syncState.user!==u.id){Sync.forget(db,syncState.shadow);syncState={user:u.id,lastPull:null,shadow:{}};saveLocal()}
@@ -1073,6 +1078,7 @@ const syncText=()=>({off:"",loading:"Conectando…",out:"Entrar para sincronizar
 function paintSync(){const t=syncText();
   for(const el of $$(".syncchip")){el.hidden=Cloud.status==="off";el.dataset.st=Cloud.status;$(".t",el).textContent=t;el.title=Cloud.error||t}
   const s=$("#cloudSt",app);if(s)s.textContent=t+(Cloud.error?` — ${Cloud.error}`:"");$$(".syncdot",app).forEach(d=>d.dataset.st=Cloud.status)}
+document.addEventListener("click",ev=>{const c=ev.target.closest&&ev.target.closest(".syncchip");if(c&&Cloud.status==="out"){ev.stopImmediatePropagation();go({name:"login"})}},true);
 window.addEventListener("online",()=>{if(!Cloud.client)cloudStart();else syncNow()});
 window.addEventListener("offline",()=>{if(Cloud.user){Cloud.status="offline";paintSync()}});
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")schedule(300)});
@@ -1086,11 +1092,8 @@ function cloudCard(){
     <div class="row"><button class="btn primary" id="cSave">Conectar</button></div><p class="note" id="cMsg"></p></section>`;
   if(Cloud.status==="loading"||(!Cloud.client&&Cloud.status!=="offline"))return`<section class="card cloud" id="cloudCard"><h3>Banco de dados</h3><p class="note" id="cloudSt">Conectando…</p></section>`;
   if(!Cloud.client)return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Banco de dados</h3><p>Sem internet agora. O app continua funcionando e guarda tudo neste aparelho; quando a conexão voltar, ele se conecta sozinho.</p></div></div></section>`;
-  if(Cloud.recovery)return`<section class="card cloud" id="cloudCard"><h3>Criar nova senha</h3><div class="fields"><label class="f">Nova senha <span class="hint">mínimo 6 caracteres</span><input type="password" id="rPass" autocomplete="new-password"></label></div><div class="row"><button class="btn primary" id="rGo">Salvar senha</button></div><p class="note" id="rMsg"></p></section>`;
-  if(!u){const up=Cloud.mode==="up";return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>${up?"Criar conta":"Entrar"}</h3><p>Cada observador usa a própria conta. Depois de entrar, o que está neste aparelho vai para o banco.</p></div></div>
-    <div class="seg" role="group" aria-label="Entrar ou criar conta"><button type="button" aria-pressed="${!up}" data-mode="in">Entrar</button><button type="button" aria-pressed="${up}" data-mode="up">Criar conta</button></div>
-    <form class="stack" id="aForm"><div class="fields">${up?`<label class="f">Seu nome<input type="text" id="aNome" autocomplete="name" required></label>`:""}<label class="f">E-mail<input type="email" id="aMail" autocomplete="email" required></label><label class="f">Senha <span class="hint">mínimo 6 caracteres</span><input type="password" id="aPass" minlength="6" autocomplete="${up?"new-password":"current-password"}" required></label></div>
-    <div class="row"><button class="btn primary" type="submit">${up?"Criar conta":"Entrar"}</button>${up?"":`<button type="button" class="btn quiet" id="aForgot">Esqueci a senha</button>`}${cfg.fixo?"":`<button type="button" class="btn quiet" id="cOff">Trocar de projeto</button>`}</div></form><p class="note" id="aMsg"></p></section>`}
+  if(!u)return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Entrar para sincronizar</h3><p>Com a sua conta, as marcações, pesagens e animais vão para o banco e a equipe trabalha junta. Sem conta, tudo fica só neste aparelho.</p></div></div>
+    <div class="row"><button class="btn primary" id="goLogin">Entrar ou criar conta</button>${cfg.fixo?"":`<button type="button" class="btn quiet" id="cOff">Trocar de projeto</button>`}</div></section>`;
   const nome=u.user_metadata?.nome||u.email;
   return`<section class="card cloud" id="cloudCard"><div class="card-h"><div><h3>Conta e sincronização</h3><p>Conectado como <b>${esc(nome)}</b>${nome!==u.email?` (${esc(u.email)})`:""}.</p></div></div>
     <div class="callout"><span class="syncdot" data-st="${Cloud.status}"></span><span id="cloudSt"></span></div>
@@ -1103,17 +1106,7 @@ function wireCloudCard(){
   const cs=$("#cSave",app);if(cs)cs.onclick=()=>{const url=$("#cUrl",app).value.trim().replace(/\/+$/,""),key=$("#cKey",app).value.trim();
     const err=Sync.checkUrl(url)||Sync.checkKey(key);if(err)return msg("#cMsg",err);
     try{localStorage.setItem(CLOUD_KEY,JSON.stringify({url,anonKey:key}))}catch(e){}cloudStart().then(render);render()};
-  $$("[data-mode]",app).forEach(b=>b.onclick=()=>{Cloud.mode=b.dataset.mode;render()});
-  const af=$("#aForm",app);if(af)af.onsubmit=async ev=>{ev.preventDefault();const btn=$("button[type=submit]",af);btn.disabled=true;msg("#aMsg","Aguarde…");
-    const email=$("#aMail",app).value.trim(),password=$("#aPass",app).value;
-    try{if(Cloud.mode==="up"){const{data,error}=await Cloud.client.auth.signUp({email,password,options:{data:{nome:$("#aNome",app).value.trim()},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;
-        if(!data.session){msg("#aMsg",`Conta criada. Enviamos um e-mail para ${email}: abra o link de confirmação e depois entre aqui.`);Cloud.mode="in";btn.disabled=false;return}}
-      else{const{error}=await Cloud.client.auth.signInWithPassword({email,password});if(error)throw error}
-      toast("Conectado. Sincronizando…")}
-    catch(e){msg("#aMsg",ptErr(e));btn.disabled=false}};
-  const fg=$("#aForgot",app);if(fg)fg.onclick=async()=>{const email=$("#aMail",app).value.trim();if(!email)return msg("#aMsg","Digite o seu e-mail acima e toque em Esqueci a senha.");
-    const{error}=await Cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.href.split("#")[0]});msg("#aMsg",error?ptErr(error):`Enviamos um link para ${email} para criar uma nova senha.`)};
-  const rg=$("#rGo",app);if(rg)rg.onclick=async()=>{const{error}=await Cloud.client.auth.updateUser({password:$("#rPass",app).value});if(error)return msg("#rMsg",ptErr(error));Cloud.recovery=false;toast("Senha alterada");render()};
+  const gl=$("#goLogin",app);if(gl)gl.onclick=()=>go({name:"login"});
   const co=$("#cOff",app);if(co)co.onclick=()=>{try{localStorage.removeItem(CLOUD_KEY)}catch(e){}unsubscribe();Cloud.client=null;Cloud.status="off";paintSync();render()};
   const sy=$("#cSync",app);if(sy)sy.onclick=()=>syncNow();
   const out=$("#cOut",app);if(out)out.onclick=async ev=>{const b=ev.currentTarget;
@@ -1128,6 +1121,101 @@ function wireCloudCard(){
       toast(`Você entrou em ${exp()?.nome||"um experimento"}`);go({name:"dash"})}
     catch(e){msg("#jMsg",ptErr(e))}};
   paintSync();
+}
+
+/* ================= ENTRAR (tela de login) ================= */
+// Tela cheia: à esquerda um "etograma vivo" (baias × horários sendo marcados), à direita o formulário.
+const SEMCONTA="etograma.semconta";
+const ETO_ROWS=["Baia 1","Baia 2","Baia 3","Baia 4","Baia 5","Baia 6"],ETO_COLS=24;
+const ETO_C=[["Ruminando","var(--s1)",.42],["Comendo","var(--accent)",.24],["Ócio","var(--s3)",.24],["Bebendo","var(--s4)",.10]];
+const reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
+function authField(id,type,label,ac,eye){return`<label class="fl"><input id="${id}" type="${type}" placeholder=" " autocomplete="${ac}" required${type==="password"?' minlength="6"':""}${type==="email"?' inputmode="email" spellcheck="false"':""}><span>${label}</span>${eye?`<button type="button" class="eye" data-eye="${id}" aria-label="Mostrar senha" aria-pressed="false">${icon("eye")}</button>`:""}<i class="fl-line"></i></label>`}
+function authBody(){
+  if(Cloud.recovery)return`<h2>Criar nova senha</h2><p class="muted">Escolha uma senha nova para a sua conta.</p>
+    <form id="lf" class="stack" novalidate>${authField("lPass","password","Nova senha (mínimo 6)","new-password",true)}
+    <button class="btn primary auth-go" type="submit"><span class="lbl">Salvar senha</span><span class="spin"></span></button><p class="auth-msg" id="lMsg" role="status" aria-live="polite"></p></form>`;
+  if(!Cloud.client)return`<h2>Sem conexão</h2><p class="muted">${cloudCfg()?"Não deu para falar com o banco agora. O app funciona sem internet e guarda tudo neste aparelho.":"Este app ainda não está ligado a um banco de dados."}</p>
+    <div class="stack">${cloudCfg()?`<button class="btn primary auth-go" id="lRetry" type="button"><span class="lbl">Tentar de novo</span><span class="spin"></span></button>`:""}<button class="linkbtn" id="lSkip" type="button">Continuar sem conta →</button></div>`;
+  const up=Cloud.mode==="up";
+  return`<div class="auth-tabs" role="tablist" aria-label="Entrar ou criar conta" data-mode="${up?"up":"in"}"><span class="pill-bg"></span><button type="button" role="tab" aria-selected="${!up}" data-m="in">Entrar</button><button type="button" role="tab" aria-selected="${up}" data-m="up">Criar conta</button></div>
+    <div class="auth-swap"><h2>${up?"Criar sua conta":"Bem-vindo de volta"}</h2><p class="muted">${up?"Cada observador usa a própria conta. Depois você entra no experimento com o código que o responsável passar.":"Entre para juntar as suas marcações com as da equipe."}</p>
+    <form id="lf" class="stack" novalidate>
+      ${up?authField("lNome","text","Seu nome","name"):""}${authField("lMail","email","E-mail","email")}${authField("lPass","password",up?"Senha (mínimo 6)":"Senha",up?"new-password":"current-password",true)}
+      <button class="btn primary auth-go" type="submit"><span class="lbl">${up?"Criar conta":"Entrar"}</span><span class="spin"></span><svg class="i arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+      <p class="auth-msg" id="lMsg" role="status" aria-live="polite"></p>
+    </form>
+    <div class="auth-alt">${up?"<span></span>":`<button type="button" class="linkbtn" id="lForgot">Esqueci a senha</button>`}<button type="button" class="linkbtn" id="lSkip">Continuar sem conta →</button></div></div>`;
+}
+VIEWS.login=function(){
+  if(Cloud.user&&!Cloud.recovery)return go({name:"dash"});
+  const seen=Cloud.authSeen;Cloud.authSeen=true; // a animação de entrada só na primeira vez
+  app.innerHTML=`<div class="auth-wrap${seen?" seen":""}">
+    <section class="auth-art" id="authArt" aria-hidden="true">
+      <div class="auth-glow"></div>
+      <div class="auth-top fx" style="--i:0"><div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</div>
+        <div class="auth-clock"><b class="num" id="aClock">--:--</b><small id="aNext">próxima marcação</small></div></div>
+      <div class="auth-copy"><span class="eyebrow fx" style="--i:1">Pesquisa de comportamento animal</span>
+        <h1 class="fx" style="--i:2">Cada <em>5 minutos</em><br>conta.</h1>
+        <p class="fx" style="--i:3">Marque o que cada animal está fazendo, acompanhe o ganho de peso e junte o trabalho de toda a equipe, mesmo sem sinal no curral.</p></div>
+      <div class="eto fx" style="--i:4"><div class="eto-grid" id="etoGrid" style="--cols:${ETO_COLS}">${ETO_ROWS.map(r=>`<span class="eto-l">${r}</span>${"<i></i>".repeat(ETO_COLS)}`).join("")}</div>
+        <div class="eto-leg">${ETO_C.map(c=>`<span><b style="background:${c[1]}"></b>${c[0]}</span>`).join("")}<span class="now-l"><b></b>Agora</span></div></div>
+      <div class="auth-facts fx" style="--i:5"><div><b class="num">12</b><span>baias</span></div><div><b class="num">288</b><span>marcações / 24 h</span></div><div><b>Offline</b><span>primeiro</span></div></div>
+    </section>
+    <section class="auth-panel"><div class="auth-card fx" style="--i:2" id="authCard">${authBody()}</div>
+      <p class="auth-foot fx" style="--i:4">Sem conta, tudo fica salvo só neste aparelho.</p></section>
+  </div>`;
+  // relógio: hora atual e quanto falta para a próxima marcação de 5 min
+  const clock=()=>{const n=new Date(),c=$("#aClock",app);if(!c)return;c.textContent=hhmm(n)+":"+pad(n.getSeconds());
+    const left=300-((n.getMinutes()%5)*60+n.getSeconds());$("#aNext",app).textContent=`próxima marcação em ${Math.floor(left/60)}:${pad(left%60)}`};
+  clock();tick=setInterval(clock,1000);
+  // etograma vivo
+  const cells=$$("#etoGrid i",app),R=ETO_ROWS.length;
+  const pick=()=>{let x=Math.random();for(const c of ETO_C){if((x-=c[2])<0)return c[1]}return ETO_C[0][1]};
+  const mark=(c,pop)=>{for(let r=0;r<R;r++){const el=cells[r*ETO_COLS+c];el.style.setProperty("--c",pick());el.className="on"+(pop?" pop":"")}};
+  let col=ETO_COLS-8;for(let c=0;c<col;c++)mark(c,false);
+  const now=c=>{cells.forEach(x=>x.classList.remove("agora"));for(let r=0;r<R;r++)cells[r*ETO_COLS+c].classList.add("agora")};
+  now(col);
+  if(!reduceMotion()){const iv=setInterval(()=>{mark(col,true);col++;
+      if(col>=ETO_COLS){col=0;cells.forEach(x=>{x.className="";x.style.removeProperty("--c")})}
+      now(col)},1100);cleanup.push(()=>clearInterval(iv))}
+  // brilho que segue o cursor (só onde há mouse)
+  const art=$("#authArt",app);
+  if(matchMedia("(hover: hover)").matches)art.addEventListener("pointermove",ev=>{const b=art.getBoundingClientRect();art.style.setProperty("--mx",(ev.clientX-b.left)+"px");art.style.setProperty("--my",(ev.clientY-b.top)+"px")});
+  wireAuth();
+};
+function wireAuth(){
+  const card=$("#authCard",app);if(!card)return;
+  const msg=(t,kind)=>{const m=$("#lMsg",app);if(m){m.textContent=t;m.className="auth-msg"+(kind?" "+kind:"")}};
+  const shake=()=>{card.classList.remove("shake");void card.offsetWidth;card.classList.add("shake")};
+  const busy=on=>{const b=$(".auth-go",card);if(b){b.classList.toggle("loading",on);b.disabled=on}};
+  // trocar Entrar/Criar conta: a pílula desliza e o conteúdo troca
+  $$("[data-m]",card).forEach(b=>b.onclick=()=>{if(Cloud.mode===b.dataset.m)return;Cloud.mode=b.dataset.m;
+    const tabs=$(".auth-tabs",card);tabs.dataset.mode=Cloud.mode;$$("[data-m]",card).forEach(x=>x.setAttribute("aria-selected",x.dataset.m===Cloud.mode));
+    const sw=$(".auth-swap",card);sw.classList.add("out");
+    setTimeout(()=>{const keep=$("#lMail",card)?.value||"";card.innerHTML=authBody();$(".auth-swap",card).classList.add("in");const m=$("#lMail",card);if(m)m.value=keep;wireAuth();($("#lNome",card)||$("#lMail",card)).focus()},170)});
+  $$("[data-eye]",card).forEach(b=>b.onclick=()=>{const i=$("#"+b.dataset.eye,card),show=i.type==="password";i.type=show?"text":"password";
+    b.setAttribute("aria-pressed",show);b.setAttribute("aria-label",show?"Esconder senha":"Mostrar senha");b.classList.toggle("on",show)});
+  const sk=$("#lSkip",card);if(sk)sk.onclick=()=>{try{localStorage.setItem(SEMCONTA,"1")}catch(e){}go({name:"dash"})};
+  const rt=$("#lRetry",card);if(rt)rt.onclick=async()=>{busy(true);await cloudStart();if(view.name==="login")render()};
+  const fg=$("#lForgot",card);if(fg)fg.onclick=async()=>{const email=$("#lMail",card).value.trim();if(!email){msg("Digite o seu e-mail e toque de novo em Esqueci a senha.","err");shake();$("#lMail",card).focus();return}
+    const{error}=await Cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.href.split("#")[0]});
+    if(error){msg(ptErr(error),"err");shake()}else msg(`Enviamos um link para ${email} para criar uma nova senha.`,"ok")};
+  const f=$("#lf",card);if(!f)return;
+  f.onsubmit=async ev=>{ev.preventDefault();
+    const nome=$("#lNome",card)?.value.trim(),mail=$("#lMail",card),email=mail?.value.trim(),password=$("#lPass",card).value;
+    if(Cloud.recovery){if(password.length<6){msg("A senha precisa ter pelo menos 6 caracteres.","err");return shake()}
+      busy(true);const{error}=await Cloud.client.auth.updateUser({password});busy(false);if(error){msg(ptErr(error),"err");return shake()}
+      Cloud.recovery=false;toast("Senha alterada");return go({name:"dash"})}
+    if(Cloud.mode==="up"&&!nome){msg("Digite o seu nome.","err");$("#lNome",card).focus();return shake()}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){msg("Digite um e-mail válido.","err");mail.focus();return shake()}
+    if(password.length<6){msg("A senha precisa ter pelo menos 6 caracteres.","err");$("#lPass",card).focus();return shake()}
+    busy(true);msg("");
+    try{if(Cloud.mode==="up"){const{data,error}=await Cloud.client.auth.signUp({email,password,options:{data:{nome},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;
+        if(!data.session){busy(false);card.classList.add("sent");msg(`Conta criada! Enviamos um e-mail para ${email}. Abra o link de confirmação e depois entre aqui.`,"ok");return}}
+      else{const{error}=await Cloud.client.auth.signInWithPassword({email,password});if(error)throw error}
+      try{localStorage.removeItem(SEMCONTA)}catch(e){}
+      card.classList.add("done");toast("Conectado. Sincronizando…") // setUser leva para o Início
+    }catch(e){busy(false);msg(ptErr(e),"err");shake()}};
 }
 
 /* ================= arquivos ================= */

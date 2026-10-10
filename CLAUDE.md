@@ -32,7 +32,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
    de comportamentos do etograma, recebe JSON, o usuário revisa e aplica na planilha da observação.
 5. (Não feito) Coleira com acelerômetro/ESP32 medindo ruminação. Precisa de hardware.
 
-Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nascimento, observações; cadastro rápido por faixa; exportar lista), **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
+**Entrar** (`VIEWS.login`, tela cheia sem menu: painel escuro com "etograma vivo" animado + relógio da próxima marcação; formulário Entrar/Criar conta/Esqueci a senha/nova senha; abre sozinha ao iniciar sem conta, "Continuar sem conta" é lembrado em `etograma.semconta`; respeita movimento reduzido), Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nascimento, observações; cadastro rápido por faixa; exportar lista), **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
 (editar etogramas, juntar CSVs dos observadores, backup JSON, apagar exemplo).
 
 ## Arquitetura atual
