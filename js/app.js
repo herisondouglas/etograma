@@ -200,7 +200,7 @@ function bands(rowsData,interval){const W=cw(true);
       if(c>=0){const b=BAND_COLORS[c];s+=`<rect x="${lw+i*cwd}" y="${y}" width="${(j-i+1)*cwd}" height="${rh}" fill="${b[1]}" data-tip="${esc(row.label)} · ${b[2]}\n${row.time(i)}–${row.time(j+1)} (${fmtDur((j-i+1)*interval)})"/>`}
       i=j+1;}});
   const yb=rowsData.length*(rh+gap)+12;
-  for(let h=0;h<=24;h+=3){const x=lw+h*60/interval*cwd;s+=`<text x="${Math.min(x,W-14)}" y="${yb+4}" text-anchor="middle">${rowsData[0].time(h*60/interval)}</text>`}
+  for(let h=0;h<=24;h+=W<520?6:3){const x=lw+h*60/interval*cwd;s+=`<text x="${Math.min(x,W-14)}" y="${yb+4}" text-anchor="middle">${rowsData[0].time(h*60/interval)}</text>`}
   return s+"</svg>";
 }
 
@@ -781,7 +781,7 @@ Responda apenas com JSON: um array com ${batch.length} objeto(s), na ordem das i
     toast(`${n} horário(s) preenchido(s) na planilha`);go({name:"sheet",id:s.id,animal:a,slot:Math.floor((vis.results[0].clock-s.inicio)/(s.intervalo*60000))})};
   function paintResults(){const s=db.sessions.find(x=>x.id===vis.sid)||getS();const box=$("#frames",app);if(!box)return;$("#resCard",app).hidden=!vis.results.length;
     box.innerHTML=vis.results.map((r,k)=>`<div class="frame"><img src="${r.url}" alt="Quadro ${k+1}"><div class="fb"><div class="spread"><span class="t">${hhmm(new Date(r.clock))}</span>${r.status==="run"?'<span class="spin"></span>':r.status==="done"&&isFinite(r.conf)?`<span class="pill ${r.conf>=.7?"good":r.conf>=.4?"warn":"bad"}">${Math.round(r.conf*100)}% de certeza</span>`:r.status==="wait"?'<span class="note">na fila</span>':""}</div>
-      ${r.status==="done"?`<div>${s.comp.map(c=>`<button class="mini" data-f="${k}" data-c="${c.id}" style="border:0;${r.comps.includes(c.id)?"":"background:var(--surface-2);color:var(--muted);text-decoration:line-through"}">${esc(c.nome)}</button>`).filter((_,i)=>r.comps.includes(s.comp[i].id)||r.showAll).join("")}<button class="mini" data-more="${k}" style="border:0;background:transparent;color:var(--accent)">${r.showAll?"menos":"+ outro"}</button></div>`:""}
+      ${r.status==="done"?`<div>${s.comp.map(c=>`<button class="mini" data-f="${k}" data-c="${c.id}" style="border:0;${r.comps.includes(c.id)?"":"background:var(--surface-2);color:var(--muted);text-decoration:line-through"}">${esc(c.nome)}</button>`).filter((_,i)=>r.comps.includes(s.comp[i].id)||r.showAll).join("")}<button class="mini" data-more="${k}" style="border:0;background:transparent;color:var(--accent-text)">${r.showAll?"menos":"+ outro"}</button></div>`:""}
       ${r.nota?`<span class="note">${esc(r.nota)}</span>`:""}</div></div>`).join("");
     $$("[data-f]",box).forEach(b=>b.onclick=()=>{const r=vis.results[+b.dataset.f];const c=b.dataset.c;r.comps=r.comps.includes(c)?r.comps.filter(x=>x!==c):[...r.comps,c];paintResults()});
     $$("[data-more]",box).forEach(b=>b.onclick=()=>{const r=vis.results[+b.dataset.more];r.showAll=!r.showAll;paintResults()});}

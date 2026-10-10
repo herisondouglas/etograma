@@ -93,8 +93,12 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 ## Decisões de design
 
 - Ferramenta de pesquisa, não site de marketing. Celular: abas embaixo (uso com uma mão no curral). Desktop: menu lateral.
-- Fontes: Bricolage Grotesque (títulos), Figtree (texto), JetBrains Mono (números).
-- Verde clorofila como cor principal; âmbar para "agora"; roxo para comportamentos fora do comum.
+- Linguagem visual de estúdio de produto (referência estética: Phenomenon Studio; **não** usar nome, logo ou o asterisco deles no app):
+  tinta quase preta `#080D10` sobre branco, um único acento laranja `#FF7A00`, linhas finas (KPIs em grade com divisórias de 1px),
+  topo/menu lateral/hero escuros (`--night`), títulos grandes e leves com espaçamento negativo, rótulos e botões em CAIXA ALTA espaçada, cantos 8–12px.
+- Laranja só como **preenchimento** com texto escuro (`--accent-ink`); texto laranja usa `--accent-text` (contraste ≥ 4,5:1). Laranja = ação principal e "agora".
+- Fontes: Bricolage Grotesque (títulos, rótulos, botões), Albert Sans (texto), JetBrains Mono (números).
+- Roxo para comportamentos fora do comum; verde só como status "bom".
 - Cores de status (verde/âmbar/vermelho) só para status, sempre com ícone + texto.
 - Cor de cada tratamento é fixa em todos os gráficos (paleta categórica validada para daltonismo: azul, laranja, verde-água, amarelo).
 - Sem `alert/confirm`: exclusões pedem um segundo toque ("Confirmar?").
