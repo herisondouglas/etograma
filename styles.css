@@ -280,3 +280,11 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 .list.out .item{opacity:.72}
 .page-h h1 .pill{vertical-align:middle;font-family:var(--body);letter-spacing:0}
 .item .chev{width:18px;height:18px;flex:none;transform:scaleX(-1);color:var(--muted)}
+.bgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(76px,1fr));gap:8px}
+.bchip{--c:var(--line-2);border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 14%,var(--surface));border-radius:var(--r-sm);padding:8px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;min-height:58px;color:var(--ink);min-width:0}
+.bchip b{font-family:var(--mono);font-size:1.2rem;font-weight:600;line-height:1.1}
+.bchip small{font-size:.68rem;font-weight:600;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.bchip.none{border-style:dashed;background:var(--surface);color:var(--muted)}
+.bchip.none small{color:var(--accent-text)}
+.nextb{margin-top:-4px}
+.nextb .btn .dot{margin-left:-2px}

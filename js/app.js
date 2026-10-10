@@ -37,9 +37,10 @@ const IC={
 const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
 
 /* ================= dados padrão ================= */
-// Divisão das dietas no curral da faculdade, baias 1–12 (A = azul, dieta 40%; V = vermelho, dieta 80%). Da baia 13 em diante repete.
+// Divisão das dietas no curral da faculdade, baias 1–12 (A = azul, dieta 40%; V = vermelho, dieta 80%).
+// Da baia 13 em diante não há regra: quem cria escolhe a dieta de cada uma.
 const ORDEM_CURRAL="AVVAAVVAVAAV";
-const ladoCurral=i=>ORDEM_CURRAL[(i-1)%ORDEM_CURRAL.length];
+const ladoCurral=i=>i>=1&&i<=ORDEM_CURRAL.length?ORDEM_CURRAL[i-1]:null;
 function B(nome,tipo){return{id:uid(),nome,tipo:tipo||"comum"}}
 function defaultSpecies(){return[
   {id:"vaca",nome:"Vaca",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
@@ -365,28 +366,49 @@ VIEWS.expForm=function(){
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
         <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
         ${ed?"":`<label class="f" data-nb>Quantas baias <span class="hint">um animal por baia; dá para adicionar mais depois</span><input type="number" id="xNB" value="12" min="0" max="500" inputmode="numeric"></label>
-        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral (azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12)</option><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
+        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral (azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12; da 13 em diante você escolhe)</option><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
       </div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
+    ${ed?"":`<section class="card" data-nb id="bCard"><div class="card-h"><div><h3>Dieta de cada baia</h3><p>Toque numa baia para trocar a dieta. As que estão como “escolher” ainda não têm dieta.</p></div></div><div class="bgrid" id="bGrid"></div><p class="note" id="bSum"></p></section>`}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Animais</h3><p>${ed.animais.length} cadastrado(s). O cadastro de cada animal (baia, brinco, raça, sexo, nascimento) fica na aba Animais.</p></div><button type="button" class="btn sm" id="toAn">${icon("tag")}Abrir animais</button></div></section>`:""}
     <div class="row"><button class="btn primary" type="submit">${ed?"Salvar alterações":"Criar experimento"}</button>${ed?`<button type="button" class="btn quiet danger" id="delX">Apagar experimento</button>`:""}</div>
   </form>`;
   wireBack({name:"dash"});
   const gs=$("#gs",app);
-  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,cor:$('[data-k="cor"]',c).value}));
-  const refresh=()=>$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});
+  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",cor:$('[data-k="cor"]',c).value}));
+  const refresh=()=>{$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});if(!ed)paintGrid()};
+  // Dieta de cada baia ao criar: asg[k] = id do tratamento da baia k+1, ou null (“escolher”).
+  const asg=[];
+  const nbN=()=>Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0)));
+  function fillBaias(from){const G=groups(),n=nbN(),div=$("#xDiv",app).value;
+    const gAz=G.find(g=>g.cor==="azul")||G[0],gVm=G.find(g=>g.cor==="vermelho"&&g!==gAz)||G.find(g=>g!==gAz)||G[0];
+    for(let i=from;i<=n;i++){const l=ladoCurral(i);
+      asg[i-1]=div==="curral"?(l==="A"?gAz.id:l==="V"?gVm.id:null):G[div==="seq"?Math.min(G.length-1,Math.floor((i-1)*G.length/n)):(i-1)%G.length].id}
+    asg.length=n;paintGrid()}
+  function paintGrid(){const box=$("#bGrid",app);if(!box)return;const G=groups();
+    asg.forEach((gid,k)=>{if(gid&&!G.some(g=>g.id===gid))asg[k]=null});
+    box.innerHTML=asg.map((gid,k)=>{const g=G.find(x=>x.id===gid);
+      return g?`<button type="button" class="bchip" data-b="${k}" style="--c:${corVar(g.cor,G.indexOf(g))}" aria-label="Baia ${k+1}: ${esc(g.nome)}. Toque para trocar"><b>${k+1}</b><small>${esc(g.nome)}</small></button>`
+        :`<button type="button" class="bchip none" data-b="${k}" aria-label="Baia ${k+1}: sem dieta. Toque para escolher"><b>${k+1}</b><small>escolher</small></button>`}).join("");
+    const falta=asg.filter(g=>!g).length;
+    $("#bSum",app).textContent=G.map(g=>`${g.nome}: ${asg.filter(x=>x===g.id).length}`).join(" · ")+(falta?` · ${falta} sem dieta`:"")}
   function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
     c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
     <div><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
     $('[data-k="cor"]',c).addEventListener("change",refresh);
     $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
       if(ed&&ed.animais.some(a=>a.grupoId===g.id))return toast("Há animais neste tratamento: mude o tratamento deles na aba Animais antes");
-      c.remove()};
+      c.remove();refresh()};
+    $('[data-k="nome"]',c).addEventListener("input",refresh);
     gs.appendChild(c)}
   grupos.forEach(addG);refresh();
   const rotSel=$("#xRot",app),showNB=()=>$$("[data-nb]",app).forEach(l=>l.hidden=rotSel.value!=="Baia");rotSel.onchange=showNB;showNB();
+  if(!ed){fillBaias(1);
+    $("#xNB",app).addEventListener("input",()=>fillBaias(asg.length+1)); // novas baias seguem a regra; as já ajustadas ficam
+    $("#xDiv",app).onchange=()=>{asg.length=0;fillBaias(1)};
+    $("#bGrid",app).addEventListener("click",ev=>{const b=ev.target.closest("[data-b]");if(!b)return;const G=groups(),k=+b.dataset.b,i=G.findIndex(g=>g.id===asg[k]);asg[k]=G[(i+1)%G.length].id;paintGrid()})}
   $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
   if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
     $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
@@ -398,10 +420,10 @@ VIEWS.expForm=function(){
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
     else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
       // já cria Baia 1…N (um animal por baia), divididas entre as dietas; tudo pode ser corrigido na aba Animais
-      const nb=data.rotulo==="Baia"?Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0))):0,div=$("#xDiv",app)?.value,seq=div==="seq";
-      // ordem do curral: baia azul vai para a dieta de cor azul (ou a 1ª), vermelha para a de cor vermelha (ou a 2ª)
-      const gAz=G.find(g=>g.cor==="azul")||G[0],gVm=G.find(g=>g.cor==="vermelho"&&g!==gAz)||G.find(g=>g!==gAz)||G[0];
-      for(let i=1;i<=nb;i++){const g=div==="curral"?(ladoCurral(i)==="A"?gAz:gVm):G[seq?Math.min(G.length-1,Math.floor((i-1)*G.length/nb)):(i-1)%G.length];x.animais.push({id:uid(),baia:String(i),brinco:"",grupoId:g.id})}
+      const nb=data.rotulo==="Baia"?asg.length:0;
+      if(nb){const falta=asg.map((g,k)=>g?null:k+1).filter(Boolean);
+        if(falta.length){toast(`Escolha a dieta da(s) baia(s) ${falta.join(", ")}`);$("#bCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}}
+      for(let i=1;i<=nb;i++)x.animais.push({id:uid(),baia:String(i),brinco:"",grupoId:asg[i-1]});
       db.experiments.push(x);db.active=x.id;save();toast(nb?`Experimento criado com ${nb} baias. Confira a dieta de cada uma.`:"Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
   };
 };
@@ -433,7 +455,8 @@ VIEWS.animals=function(){
   app.innerHTML=pageHead("Animais","Cadastro de animais",`${list.length} animal(is) em <b>${esc(e.nome)}</b>${out.length?` (e ${out.length} que ${out.length===1?"saiu":"saíram"})`:""}. Corrigir um animal aqui mantém as pesagens, o consumo e as observações dele.`,`<button class="btn primary" id="newA">${icon("plus")}Cadastrar animal</button><button class="btn quiet" id="exA">${icon("down")}Exportar lista</button>`)+`
   <div class="stack-lg">
     <section class="card"><div class="card-h"><div><h3>Cadastro rápido</h3><p>Vários animais de uma vez pelo número ${porBaia(e)?"da baia":"do brinco"}. Ex.: <span class="num">1-12</span> ou <span class="num">1, 3, 5</span>. Raça, sexo e nascimento você completa depois em Editar.</p></div></div>
-      <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button>${porBaia(e)?`<button type="button" class="btn" id="nextB">${icon("plus")}Baia ${nextBaia(e)}</button>`:""}</div></div></section>
+      <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button></div></div>
+      ${porBaia(e)?`<div class="row nextb"><span class="note">Nova baia:</span>${e.grupos.map(g=>`<button type="button" class="btn sm" data-nextg="${g.id}">${icon("plus")}<i class="dot" style="background:${gc(e,g)};border-radius:50%"></i>Baia ${nextBaia(e)} · ${esc(g.nome)}</button>`).join("")}</div>`:""}</section>
     <div class="spread"><div class="legend">${counts}</div>${list.length>8?`<input type="search" id="qFind" placeholder="Procurar ${idLbl}, raça…" aria-label="Procurar animal" style="max-width:260px">`:""}</div>
     <div class="list" id="anList">${list.length?list.map(item).join(""):`<div class="empty">Nenhum animal ativo cadastrado.<span>Use o cadastro rápido acima ou o botão "Cadastrar animal".</span></div>`}</div>
     ${out.length?`<section class="stack"><h3>Saíram do experimento</h3><p class="note" style="margin-top:-6px">Continuam no histórico, mas não entram nas médias, nos alertas nem na estatística.</p><div class="list out" id="anOut">${out.map(item).join("")}</div></section>`:""}
@@ -444,7 +467,7 @@ VIEWS.animals=function(){
     const have=new Set(ativos(e).map(a=>norm(idOf(e,a)))),dup=[];let n=0;const gid=$("#qG",app).value;
     for(const id of ids){if(have.has(norm(id))){dup.push(id);continue}have.add(norm(id));e.animais.push(porBaia(e)?{id:uid(),baia:id,brinco:"",grupoId:gid}:{id:uid(),brinco:id,grupoId:gid});n++}
     save();view.g=gid;render();toast(`${n} animal(is) cadastrado(s)${dup.length?` · já existia(m): ${dup.join(", ")}`:""}`)};
-  const nb=$("#nextB",app);if(nb)nb.onclick=()=>{const gid=$("#qG",app).value,n=nextBaia(e);e.animais.push({id:uid(),baia:n,brinco:"",grupoId:gid});save();view.g=gid;render();toast(`Baia ${n} adicionada em ${grupo(e,gid)?.nome||""}`)};
+  $$("[data-nextg]",app).forEach(btn=>btn.onclick=()=>{const gid=btn.dataset.nextg,n=nextBaia(e);e.animais.push({id:uid(),baia:n,brinco:"",grupoId:gid});save();view.g=gid;render();toast(`Baia ${n} adicionada em ${grupo(e,gid)?.nome||""}`)});
   $("#qAdd",app).onclick=add;$("#qIds",app).addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();add()}});
   const f=$("#qFind",app);if(f)f.oninput=()=>{const q=norm(f.value);$$("#anList .item, #anOut .item",app).forEach(it=>it.hidden=!!q&&!it.dataset.s.includes(q))};
   $("#exA",app).onclick=()=>saveFile(`${e.nome} - animais.csv`,toCSV([["Baia","Brinco","Tratamento","Raça","Sexo","Nascimento","Idade (meses)","Observações","Situação","Data de saída","Motivo da saída"],
