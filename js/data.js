@@ -10,6 +10,25 @@ const Data=(function(){
   const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/\s+/g," ").trim();
   const grupo=(e,gid)=>e.grupos.find(g=>g.id===gid);
 
+  /* ---------- animais ---------- */
+  // Identificação principal: número da baia (rotulo "Baia") ou brinco. Se faltar uma, usa a outra.
+  const porBaia=e=>e.rotulo==="Baia";
+  const ident=(e,a)=>String((porBaia(e)?(a.baia||a.brinco):(a.brinco||a.baia))||"");
+  // "1-12, 15" → ["1",…,"12","15"]. Intervalos só com números inteiros (até 500 de uma vez).
+  function parseIds(txt){const out=[];
+    for(const part of String(txt||"").split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean)){
+      const m=part.match(/^(\d+)\s*(?:-|a|até)\s*(\d+)$/i);
+      if(m&&+m[2]>=+m[1]&&+m[2]-+m[1]<=500){const w=m[1].length>1&&m[1][0]==="0"?m[1].length:0;for(let i=+m[1];i<=+m[2];i++)out.push(w?String(i).padStart(w,"0"):String(i))}
+      else out.push(part)}
+    return out}
+  // Atualiza dados de versões antigas: antes, em experimentos por baia, o número da baia ficava no campo "brinco".
+  function migrate(d){
+    for(const e of d.experiments||[])if(porBaia(e))for(const a of e.animais||[])if(a.baia==null){a.baia=a.brinco;a.brinco=""}
+    return d}
+  // Idade em meses a partir da data de nascimento (AAAA-MM-DD).
+  function ageMonths(nasc,ref=new Date()){if(!nasc)return NaN;const d=parseDay(nasc);if(!isFinite(d))return NaN;
+    return (ref.getFullYear()-d.getFullYear())*12+(ref.getMonth()-d.getMonth())-(ref.getDate()<d.getDate()?1:0)}
+
   /* ---------- desempenho ---------- */
   // GMD = inclinação da reta peso × dias (mínimos quadrados). Com 2 pesagens é igual a (final − inicial) ÷ dias.
   function gmdOf(pts,d0){
@@ -21,7 +40,7 @@ const Data=(function(){
     const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
     return e.animais.map(a=>{
       const pts=pes.filter(p=>isFinite(p.pesos[a.id])).map(p=>({d:p.data,w:+p.pesos[a.id]}));
-      const g=grupo(e,a.grupoId)||{};const o={id:a.id,brinco:a.brinco,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
+      const g=grupo(e,a.grupoId)||{};const o={id:a.id,ident:ident(e,a),brinco:a.brinco,baia:a.baia,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
       if(pts.length){o.p0=pts[0].w;o.pf=pts[pts.length-1].w}
       if(pts.length>=2){o.dias=dayDiff(pts[0].d,pts[pts.length-1].d);o.gmd=o.dias>0?gmdOf(pts,pts[0].d):NaN}
       const cs=e.consumo.map(c=>+c.valores[a.id]).filter(isFinite);o.cms=cs.length?S.mean(cs):NaN;
@@ -34,7 +53,9 @@ const Data=(function(){
   /* ---------- comportamento ---------- */
   function sessionAnimalId(e,s,k){
     if(s.animalIds&&s.animalIds[k]&&e.animais.some(a=>a.id===s.animalIds[k]))return s.animalIds[k];
-    const n=norm(s.animais[k]);const a=e.animais.find(a=>norm(a.brinco)===n||n.endsWith(" "+norm(a.brinco)));return a?a.id:null;
+    // pelo nome salvo na observação ("Baia 7", "07"…): primeiro pela identificação principal, depois pela outra
+    const n=norm(s.animais[k]),hit=k=>k&&(n===k||n.endsWith(" "+k));
+    const a=e.animais.find(a=>hit(norm(ident(e,a))))||e.animais.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
   }
   // min/dia = (marcações do comportamento ÷ horários marcados) × 1440
   function behaviorVars(e,sessions){
@@ -52,7 +73,7 @@ const Data=(function(){
   function dataset(e,sessions){
     const P=performance(e),BV=behaviorVars(e,sessions);
     const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
-    const rows=P.map(p=>({id:p.id,brinco:p.brinco,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
+    const rows=P.map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
     const vars=[...base,...BV.vars].filter(v=>rows.filter(r=>isFinite(r.v[v.key])).length>=3);
     return{rows,vars,perf:P};
   }
@@ -110,7 +131,7 @@ const Data=(function(){
     return out;
   }
 
-  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
+  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
     nSlots,slotDate,marked,sessionSignature,toCSV,sessionCSV,parseCSV,sessionsFromCSV};
 })();
 if(typeof module!=="undefined")module.exports=Data;

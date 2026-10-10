@@ -52,4 +52,25 @@ const [b2] = D.sessionsFromCSV(alt, { species: [], exp: null });
 assert.strictEqual(b2.intervalo, 5); assert.strictEqual(Object.keys(b2.marks[0]).length, 2);
 assert.throws(() => D.sessionsFromCSV("Animal;Data;Hora\n07;ontem;07:00", {}));
 
+// Animais: identificação por baia ou brinco
+const eb = { id: "eb", rotulo: "Baia", grupos: [], animais: [{ id: "b1", baia: "1", brinco: "BR-1023" }, { id: "b11", baia: "11", brinco: "1" }], pesagens: [], consumo: [] };
+assert.strictEqual(D.ident(eb, eb.animais[0]), "1");
+assert.strictEqual(D.ident({ rotulo: "Animal" }, eb.animais[0]), "BR-1023");
+assert.strictEqual(D.ident(eb, { brinco: "07" }), "07"); // sem baia, usa o brinco
+// "Baia 1" é a baia 1, não o animal de brinco "1" (que está na baia 11)
+assert.strictEqual(D.sessionAnimalId(eb, { animais: ["Baia 1"] }, 0), "b1");
+assert.strictEqual(D.sessionAnimalId(eb, { animais: ["Baia 11"] }, 0), "b11");
+assert.strictEqual(D.sessionAnimalId(eb, { animais: ["BR-1023"] }, 0), "b1");
+assert.deepStrictEqual(D.parseIds("1-4, 7; 10 a 12"), ["1", "2", "3", "4", "7", "10", "11", "12"]);
+assert.deepStrictEqual(D.parseIds("01-03, BR-9"), ["01", "02", "03", "BR-9"]);
+assert.deepStrictEqual(D.parseIds("5-2"), ["5-2"]); // intervalo invertido fica como texto
+// Migração: em experimento por baia, o número que estava em "brinco" vai para "baia"
+const old = { experiments: [{ rotulo: "Baia", animais: [{ id: "x", brinco: "3" }] }, { animais: [{ id: "y", brinco: "07" }] }] };
+D.migrate(old);
+assert.deepStrictEqual(old.experiments[0].animais[0], { id: "x", baia: "3", brinco: "" });
+assert.deepStrictEqual(old.experiments[1].animais[0], { id: "y", brinco: "07" });
+assert.strictEqual(D.ageMonths("2024-10-10", new Date(2026, 9, 10)), 24);
+assert.strictEqual(D.ageMonths("2024-10-11", new Date(2026, 9, 10)), 23);
+assert.ok(isNaN(D.ageMonths("")));
+
 console.log("Dados: todos os testes passaram.");

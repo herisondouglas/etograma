@@ -28,7 +28,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
    de comportamentos do etograma, recebe JSON, o usuário revisa e aplica na planilha da observação.
 5. (Não feito) Coleira com acelerômetro/ESP32 medindo ruminação. Precisa de hardware.
 
-Além disso: **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
+Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nascimento, observações; cadastro rápido por faixa; exportar lista), **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
 (editar etogramas, juntar CSVs dos observadores, backup JSON, apagar exemplo).
 
 ## Arquitetura atual
@@ -63,7 +63,8 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
     id, nome, especieId, especie, responsavel, inicio: "AAAA-MM-DD", exemplo?,
     rotulo: "Baia" | "Animal",   // como os animais são identificados: "Baia 7" (número da baia) ou "Animal 07" (brinco)
     grupos:  [{ id, nome, dieta, gmdMeta /* kg/dia */, cor: "azul"|"vermelho"|"laranja"|"verde"|"amarelo" }],
-    animais: [{ id, brinco /* nº da baia ou brinco */, grupoId }],
+    animais: [{ id, baia, brinco, grupoId, raca?, sexo? /* Macho|Fêmea|Macho castrado */, nascimento? /* AAAA-MM-DD */, obs? }],
+    // identificação principal = Data.ident(e,a): baia se rotulo "Baia", senão brinco (cai na outra se faltar)
     pesagens:[{ id, data, pesos:   { [animalId]: kg } }],
     consumo: [{ id, data, valores: { [animalId]: kgMS_dia } }]
   }],
@@ -78,7 +79,7 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 }
 ```
 
-Animais têm `id` estável: o formulário do experimento edita brinco/tratamento por `id` (corrigir "7" → "07" não perde pesagens). Remover um animal com dados pede confirmação e apaga os pesos/consumo dele.
+Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
 
 GMD = inclinação da regressão linear peso × dias com todas as pesagens (com 2 pesagens é igual a (final − inicial)/dias).
 

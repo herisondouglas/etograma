@@ -31,7 +31,8 @@ const IC={
   spark:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   info:'<circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/>',
   film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
-  x:'<path d="M6 6l12 12M18 6 6 18"/>'
+  x:'<path d="M6 6l12 12M18 6 6 18"/>',
+  tag:'<path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.6"/>'
 };
 const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
 
@@ -50,7 +51,7 @@ function exampleData(species){
   const today=new Date();today.setHours(0,0,0,0);const start=new Date(today);start.setDate(start.getDate()-56);
   // gA = dieta 80% (mais concentrado: come menos tempo, rumina menos, ganha mais); gB = dieta 40%
   const gA={id:"gA",nome:"Dieta 80%",dieta:"80% de concentrado",gmdMeta:1.4,cor:"vermelho"},gB={id:"gB",nome:"Dieta 40%",dieta:"40% de concentrado",gmdMeta:1.0,cor:"azul"};
-  const animais=[];for(let i=1;i<=12;i++)animais.push({id:"a"+i,brinco:String(i),grupoId:i%2?"gA":"gB"});
+  const animais=[];for(let i=1;i<=12;i++){const n=new Date(today);n.setMonth(n.getMonth()-(22+i%4));animais.push({id:"a"+i,baia:String(i),brinco:String(4100+i*13),grupoId:i%2?"gA":"gB",raca:"Nelore",sexo:"Macho",nascimento:isoDay(n)})}
   const truth={};
   animais.forEach(a=>{const A=a.grupoId==="gA";
     const eat=(A?215:265)+gauss(r)*22,rum=(A?395:505)+gauss(r)*35;
@@ -60,14 +61,14 @@ function exampleData(species){
   const dates=[0,28,56].map(d=>{const x=new Date(start);x.setDate(x.getDate()+d);return isoDay(x)});
   const pesagens=dates.map((d,k)=>({id:uid(),data:d,pesos:Object.fromEntries(animais.map(a=>{const t=truth[a.id];return[a.id,Math.round((t.p0+t.gmd*k*28+gauss(r)*2.5)*2)/2]}))}));
   const consumo=dates.slice(1).map(d=>({id:uid(),data:d,valores:Object.fromEntries(animais.map(a=>[a.id,Math.round((truth[a.id].cms+gauss(r)*.25)*10)/10]))}));
-  const exp={id:"exemplo",exemplo:true,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
+  const exp={id:"exemplo",exemplo:true,exemploV:3,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
   // etograma 24 h, 6 observadores × 2 animais
   const sessStart=new Date(start);sessStart.setDate(sessStart.getDate()+50);sessStart.setHours(7,0,0,0);
   const comp=sp.comp.map(c=>({...c}));const id=n=>comp.find(c=>c.nome.startsWith(n))?.id;
   const sessions=[];
   for(let o=0;o<6;o++){
     const pair=[animais[o*2],animais[o*2+1]];
-    const s={id:uid(),exemplo:true,expId:exp.id,nome:"Etograma 24 h · dia 50",especie:sp.nome,comp,observador:"Observador "+(o+1),animais:pair.map(a=>"Baia "+a.brinco),animalIds:pair.map(a=>a.id),inicio:sessStart.getTime(),intervalo:5,duracao:24,marks:{},obs:{}};
+    const s={id:uid(),exemplo:true,expId:exp.id,nome:"Etograma 24 h · dia 50",especie:sp.nome,comp,observador:"Observador "+(o+1),animais:pair.map(a=>"Baia "+a.baia),animalIds:pair.map(a=>a.id),inicio:sessStart.getTime(),intervalo:5,duracao:24,marks:{},obs:{}};
     pair.forEach((a,k)=>{const t=truth[a.id];const pE=t.eat/1440,pR=t.rum/1440,pW=.022,pI=Math.max(.05,1-pE-pR-pW);
       s.marks[k]={};s.obs[k]={};let st="Ócio";
       for(let i=0;i<288;i++){const h=(7+i*5/60)%24;
@@ -91,7 +92,7 @@ function fresh(){const species=defaultSpecies();const ex=exampleData(species);re
 function load(){
   let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
   if(raw){
-    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(d)}catch(e){}
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(Data.migrate(d))}catch(e){}
     // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
     try{localStorage.setItem(KEYBAD,raw)}catch(e){}
   }
@@ -99,9 +100,9 @@ function load(){
   try{const raw=localStorage.getItem(KEY1);if(raw){const o=JSON.parse(raw);if(o&&o.species)d.species=o.species;if(o&&o.sessions)d.sessions.push(...o.sessions.filter(s=>!s.exemplo).map(s=>({...s,expId:null})))}}catch(e){}
   return d;
 }
-// O exemplo da primeira versão (Dieta A/B, brincos) é trocado pelo atual (baias, dieta 40% × 80%).
+// Exemplo de versões anteriores é trocado pelo atual (baias 1–12, dieta 40% × 80%, cadastro completo dos animais).
 function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="exemplo");
-  if(!old||old.rotulo)return d;
+  if(!old||old.exemploV===3)return d;
   try{const ex=exampleData(d.species.some(s=>s.id==="vaca")?d.species:defaultSpecies());
     d.experiments=d.experiments.map(x=>x===old?ex.exp:x);d.sessions=[...d.sessions.filter(s=>!s.exemplo),...ex.sessions];
     localStorage.setItem(KEY,JSON.stringify(d))}catch(e){} // se falhar, segue com o exemplo antigo; nunca perde dados reais
@@ -125,10 +126,11 @@ const corVar=(cor,i)=>(CORES.find(c=>c[0]===cor)||[])[1]||`var(--s${Math.max(0,i
 const gc=(e,g)=>corVar(g&&g.cor,e.grupos.indexOf(g));
 const gColor=(e,gid)=>gc(e,grupo(e,gid));
 // Identificação dos animais: por baia ("Baia 7") ou por brinco ("Animal 07").
-const porBaia=e=>e.rotulo==="Baia";
+const porBaia=Data.porBaia;
 const rot=e=>porBaia(e)?"Baia":"Animal";
-const aName=(e,a)=>`${rot(e)} ${a.brinco}`;
-const shortName=(e,a)=>porBaia(e)?aName(e,a):a.brinco;
+const idOf=(e,x)=>x.ident!=null?x.ident:Data.ident(e,x); // x = animal, linha de desempenho ou de dados
+const aName=(e,x)=>`${rot(e)} ${idOf(e,x)}`;
+const shortName=(e,x)=>porBaia(e)?aName(e,x):idOf(e,x);
 
 /* ================= cálculos (funções em js/data.js) ================= */
 const performance=e=>Data.performance(e);
@@ -222,9 +224,9 @@ function bands(rowsData,interval){const W=cw(true);
 }
 
 /* ================= casca e navegação ================= */
-const TABS=[["inicio","Início","home"],["observar","Observar","obs"],["desempenho","Desempenho","perf"],["estatistica","Estatística","stats"],["visao","Visão IA","eye"]];
-const TAB_OF={dash:"inicio",expForm:"inicio",obsHome:"observar",setup:"observar",sheet:"observar",summary:"observar",perf:"desempenho",entry:"desempenho",stats:"estatistica",vision:"visao",settings:"ajustes",species:"ajustes"};
-const ROOT={inicio:{name:"dash"},observar:{name:"obsHome"},desempenho:{name:"perf"},estatistica:{name:"stats"},visao:{name:"vision"},ajustes:{name:"settings"}};
+const TABS=[["inicio","Início","home"],["animais","Animais","tag"],["observar","Observar","obs"],["desempenho","Desempenho","perf"],["estatistica","Estatística","stats"],["visao","Visão IA","eye"]];
+const TAB_OF={dash:"inicio",expForm:"inicio",animals:"animais",animalForm:"animais",obsHome:"observar",setup:"observar",sheet:"observar",summary:"observar",perf:"desempenho",entry:"desempenho",stats:"estatistica",vision:"visao",settings:"ajustes",species:"ajustes"};
+const ROOT={inicio:{name:"dash"},animais:{name:"animals"},observar:{name:"obsHome"},desempenho:{name:"perf"},estatistica:{name:"stats"},visao:{name:"vision"},ajustes:{name:"settings"}};
 let view={name:"dash"},tick=null,wake=null,lastSlot=null,cleanup=[];
 const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
 
@@ -289,7 +291,7 @@ VIEWS.dash=function(){
     <div class="stack" style="gap:8px"><span class="eyebrow">${esc(e.especie)} · ${e.grupos.map(g=>esc(g.nome)).join(" vs ")}${e.exemplo?" · dados de exemplo":""}</span><h1>${esc(e.nome)}</h1></div>
     <div class="facts">
       <div><b class="tnum">Dia ${Math.max(dia,1)}</b><span>início ${dmy(parseDay(e.inicio))}</span></div>
-      <div><b class="tnum">${e.animais.length}</b><span>animais</span></div>
+      <button class="fact" data-go="animais"><b class="tnum">${e.animais.length}</b><span>animais ›</span></button>
       <div><b class="tnum">${e.grupos.length}</b><span>tratamentos</span></div>
       <div><b>${esc(e.responsavel||"—")}</b><span>responsável</span></div>
     </div>
@@ -318,7 +320,7 @@ VIEWS.dash=function(){
     <div class="spread"><h2>Experimentos</h2><button class="btn sm" data-go="new">${icon("plus")}Novo experimento</button></div>
     <div class="list">${db.experiments.map(x=>`<div class="item"><div class="grow"><div class="title">${esc(x.nome)} ${x.exemplo?'<span class="tag">exemplo</span>':""}</div><div class="sub">${esc(x.especie)} · ${x.animais.length} animais · início ${dmy(parseDay(x.inicio))}</div></div>${x.id===db.active?'<span class="pill neutral">Ativo</span>':`<button class="btn sm" data-act="${x.id}">Abrir</button>`}</div>`).join("")}</div>
   </section>`;
-  $$("[data-go]",app).forEach(b=>b.onclick=()=>{const g=b.dataset.go;go(g==="setup"?{name:"setup",sp:e.especieId}:g==="peso"?{name:"entry",kind:"peso"}:g==="edit"?{name:"expForm",id:e.id}:g==="new"?{name:"expForm"}:{name:"perf"})});
+  $$("[data-go]",app).forEach(b=>b.onclick=()=>{const g=b.dataset.go;go(g==="setup"?{name:"setup",sp:e.especieId}:g==="peso"?{name:"entry",kind:"peso"}:g==="edit"?{name:"expForm",id:e.id}:g==="new"?{name:"expForm"}:g==="animais"?{name:"animals"}:{name:"perf"})});
   $$("[data-act]",app).forEach(b=>b.onclick=()=>{db.active=b.dataset.act;save();render()});
 };
 function ethogramCard(e){
@@ -345,8 +347,6 @@ document.addEventListener("click",e=>{if(e.target.closest("#toObs"))go({name:"ob
 VIEWS.expForm=function(){
   const ed=view.id?db.experiments.find(x=>x.id===view.id):null;
   const grupos=ed?ed.grupos.map((g,i)=>({...g,cor:g.cor||(CORES[i]||CORES[0])[0]})):[{id:uid(),nome:"Dieta 40%",dieta:"40% de concentrado",gmdMeta:1.0,cor:"azul"},{id:uid(),nome:"Dieta 80%",dieta:"80% de concentrado",gmdMeta:1.4,cor:"vermelho"}];
-  // O animal tem dados se já foi pesado, teve consumo lançado ou aparece numa observação.
-  const hasData=aid=>!!ed&&(ed.pesagens.some(p=>isFinite(p.pesos[aid]))||ed.consumo.some(c=>isFinite(c.valores[aid]))||db.sessions.some(s=>s.expId===ed.id&&(s.animalIds||[]).includes(aid)));
   app.innerHTML=pageHead(ed?"Editar experimento":"Novo experimento",ed?esc(ed.nome):"Configure o experimento","Cada tratamento (dieta) tem a sua meta de ganho de peso. É ela que o app usa para dizer se cada animal está no esperado.",null,"Início")+`
   <form class="form" id="f">
     <div class="card">
@@ -360,74 +360,117 @@ VIEWS.expForm=function(){
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
-    <div class="spread"><h2>Animais <span class="muted num" id="anN"></span></h2></div>
-    <div class="card">
-      <div class="fields">
-        <label class="f">Adicionar animais <span class="hint">números das baias ou brincos, separados por vírgula</span><input type="text" id="newB" placeholder="1, 3, 5, 7" autocomplete="off"></label>
-        <label class="f">No tratamento<select id="newG"></select></label>
-        <div class="row" style="align-self:end"><button type="button" class="btn" id="addA">${icon("plus")}Adicionar</button></div>
-      </div>
-      <div class="anlist" id="an"></div>
-      <p class="note">Corrigir um brinco ou trocar o tratamento aqui mantém as pesagens, o consumo e as observações do animal.</p>
-    </div>
+    ${ed?`<section class="card"><div class="card-h"><div><h3>Animais</h3><p>${ed.animais.length} cadastrado(s). O cadastro de cada animal (baia, brinco, raça, sexo, nascimento) fica na aba Animais.</p></div><button type="button" class="btn sm" id="toAn">${icon("tag")}Abrir animais</button></div></section>`:""}
     <div class="row"><button class="btn primary" type="submit">${ed?"Salvar alterações":"Criar experimento"}</button>${ed?`<button type="button" class="btn quiet danger" id="delX">Apagar experimento</button>`:""}</div>
   </form>`;
   wireBack({name:"dash"});
-  const gs=$("#gs",app),an=$("#an",app),newB=$("#newB",app),newG=$("#newG",app);
-  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",cor:$('[data-k="cor"]',c).value}));
-  const opts=sel=>groups().map(g=>`<option value="${g.id}"${g.id===sel?" selected":""}>${esc(g.nome)}</option>`).join("");
-  const rows=()=>$$("[data-aid]",an);
-  function refresh(){
-    $$("select[data-g]",an).forEach(s=>{const v=s.value;s.innerHTML=opts(v)});newG.innerHTML=opts(newG.value);
-    const G=groups();rows().forEach(r=>{const g=G.find(g=>g.id===$("[data-g]",r).value);$(".dot",r).style.background=corVar(g&&g.cor,G.indexOf(g))});
-    $$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});
-    const n=rows().length;$("#anN",app).textContent=n?`· ${n}`:"";
-    const empty=$("[data-empty]",an);
-    if(!n&&!empty)an.insertAdjacentHTML("beforeend",`<p class="note" data-empty>Nenhum animal ainda. Digite os brincos acima e toque em Adicionar.</p>`);
-    if(n&&empty)empty.remove();
-  }
+  const gs=$("#gs",app);
+  const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,cor:$('[data-k="cor"]',c).value}));
+  const refresh=()=>$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});
   function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
     c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
     <div><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
-    $('[data-k="nome"]',c).addEventListener("input",refresh);$('[data-k="cor"]',c).addEventListener("change",refresh);
+    $('[data-k="cor"]',c).addEventListener("change",refresh);
     $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
-      if(rows().some(r=>$("[data-g]",r).value===g.id))return toast("Mova ou remova os animais deste tratamento antes");
-      c.remove();refresh()};
+      if(ed&&ed.animais.some(a=>a.grupoId===g.id))return toast("Há animais neste tratamento: mude o tratamento deles na aba Animais antes");
+      c.remove()};
     gs.appendChild(c)}
-  function addRow(a){const r=document.createElement("div");r.className="beh";r.dataset.aid=a.id;
-    r.innerHTML=`<label class="anb"><i class="dot"></i><input type="text" data-b value="${esc(a.brinco)}" aria-label="Baia ou brinco"></label><select data-g aria-label="Tratamento do animal">${opts(a.grupoId)}</select><button type="button" class="btn sm quiet danger" aria-label="Remover animal ${esc(a.brinco)}">${icon("x")}</button>`;
-    $("[data-g]",r).onchange=refresh;
-    $("button",r).onclick=ev=>{const b=ev.currentTarget;
-      if(hasData(a.id)&&!b.dataset.armed){b.dataset.armed=1;b.textContent="Apagar?";b.setAttribute("aria-label","Confirmar: remover o animal e apagar as pesagens e o consumo dele");return}
-      r.remove();refresh()};
-    an.appendChild(r)}
-  function addFromInput(){const list=newB.value.split(/[,;\n]+/).map(x=>x.trim()).filter(Boolean);if(!list.length)return;
-    const have=new Set(rows().map(r=>norm($("[data-b]",r).value)));const dup=[];
-    list.forEach(b=>{if(have.has(norm(b))){dup.push(b);return}have.add(norm(b));addRow({id:uid(),brinco:b,grupoId:newG.value})});
-    newB.value="";refresh();if(dup.length)toast(`Já estava na lista: ${dup.join(", ")}`)}
-  grupos.forEach(addG);
-  (ed?ed.animais:[]).forEach(addRow);refresh();
+  grupos.forEach(addG);refresh();
   $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
-  $("#addA",app).onclick=()=>{addFromInput();newB.focus()};
-  newB.addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();addFromInput()}});
-  if(ed)$("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
-    db.experiments=db.experiments.filter(x=>x!==ed);db.sessions=db.sessions.filter(s=>s.expId!==ed.id);db.active=db.experiments[0]?.id||null;save();toast("Experimento apagado");go({name:"dash"})};
+  if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
+    $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar experimento e seus registros?";return}
+      db.experiments=db.experiments.filter(x=>x!==ed);db.sessions=db.sessions.filter(s=>s.expId!==ed.id);db.active=db.experiments[0]?.id||null;save();toast("Experimento apagado");go({name:"dash"})}}
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
-    addFromInput(); // brincos digitados sem tocar em Adicionar também entram
     const sp=db.species.find(s=>s.id===$("#xSp",app).value);
     const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0,cor:$('[data-k="cor"]',c).value}));
-    const A=rows().map(r=>({id:r.dataset.aid,brinco:$("[data-b]",r).value.trim(),grupoId:$("[data-g]",r).value}));
-    if(!A.length){toast("Adicione pelo menos um animal");return}
-    if(A.some(a=>!a.brinco)){toast("Há um animal sem brinco");return}
-    const seen=new Set(),rep=A.find(a=>{const k=norm(a.brinco);if(seen.has(k))return true;seen.add(k);return false});
-    if(rep){toast(`Brinco repetido: ${rep.brinco}`);return}
-    const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G,animais:A};
-    if(ed){const keep=new Set(A.map(a=>a.id)),gone=ed.animais.filter(a=>!keep.has(a.id)).map(a=>a.id);
-      ed.pesagens.forEach(p=>gone.forEach(id=>delete p.pesos[id]));ed.consumo.forEach(c=>gone.forEach(id=>delete c.valores[id]));
-      Object.assign(ed,data)}
-    else{const x={id:uid(),...data,pesagens:[],consumo:[]};db.experiments.push(x);db.active=x.id}
-    save();toast(ed?"Experimento salvo":"Experimento criado");go({name:"dash"});
+    const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
+    if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
+    else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};db.experiments.push(x);db.active=x.id;save();toast("Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
   };
+};
+
+/* ================= ANIMAIS (cadastro) ================= */
+const RACAS={vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
+  cavalo:["Mangalarga Marchador","Quarto de Milha","Crioulo","Árabe","Puro-Sangue Inglês","Campolina","Sem raça definida"],
+  ovelha:["Santa Inês","Dorper","Texel","Morada Nova","Suffolk","Lacaune","Sem raça definida"],
+  galinha:["Caipira","Embrapa 051","Isa Brown","Hy-Line","Cobb","Ross"]};
+const SEXOS=["Macho","Fêmea","Macho castrado"];
+const sortAnimals=e=>[...e.animais].sort((a,b)=>idOf(e,a).localeCompare(idOf(e,b),undefined,{numeric:true}));
+const fmtIdade=m=>!isFinite(m)||m<0?"":m<24?`${m} ${m===1?"mês":"meses"}`:`${Math.floor(m/12)} anos${m%12?` e ${m%12} m`:""}`;
+// Mantém o nome mostrado nas observações igual ao cadastro (ex.: depois de corrigir o número da baia).
+function syncSessionNames(e,a){db.sessions.forEach(s=>{if(s.expId!==e.id||!s.animalIds)return;const k=s.animalIds.indexOf(a.id);if(k>=0)s.animais[k]=shortName(e,a)})}
+function removeAnimal(e,a){e.animais=e.animais.filter(x=>x!==a);e.pesagens.forEach(p=>delete p.pesos[a.id]);e.consumo.forEach(c=>delete c.valores[a.id])}
+
+VIEWS.animals=function(){
+  const e=exp();if(!e){app.innerHTML=pageHead("Animais","Cadastro de animais")+needExp();return wireNeedExp()}
+  const P=Object.fromEntries(performance(e).map(p=>[p.id,p])),list=sortAnimals(e),idLbl=porBaia(e)?"baia":"brinco";
+  const opts=e.grupos.map(g=>`<option value="${g.id}"${g.id===view.g?" selected":""}>${esc(g.nome)}</option>`).join("");
+  const item=a=>{const g=grupo(e,a.grupoId),p=P[a.id]||{},other=porBaia(e)?(a.brinco?`brinco ${a.brinco}`:""):(a.baia?`baia ${a.baia}`:"");
+    const sub=[g?.nome||"Sem tratamento",a.raca,a.sexo,fmtIdade(Data.ageMonths(a.nascimento)),isFinite(p.pf)?`${fmt(p.pf,1)} kg`:""].filter(Boolean).map(esc).join(" · ");
+    const search=norm([aName(e,a),a.brinco,a.baia,g?.nome,a.raca,a.sexo,a.obs].join(" "));
+    return`<button type="button" class="item link" data-ed="${a.id}" data-s="${esc(search)}" aria-label="Editar ${esc(aName(e,a))}"><span class="dot" style="background:${gColor(e,a.grupoId)};border-radius:50%"></span><div class="grow"><div class="title">${esc(aName(e,a))}${other?` <span class="muted" style="font-weight:500">· ${esc(other)}</span>`:""}</div><div class="sub">${sub}</div></div>${p.status&&p.status!=="sem"?statusPill(p.status):""}<svg class="i chev" viewBox="0 0 24 24" aria-hidden="true">${IC.back}</svg></button>`};
+  const counts=e.grupos.map(g=>`<span><i class="dot" style="background:${gc(e,g)};border-radius:50%"></i>${esc(g.nome)} <b class="num">${e.animais.filter(a=>a.grupoId===g.id).length}</b></span>`).join("");
+  app.innerHTML=pageHead("Animais","Cadastro de animais",`${e.animais.length} animal(is) em <b>${esc(e.nome)}</b>. Corrigir um animal aqui mantém as pesagens, o consumo e as observações dele.`,`<button class="btn primary" id="newA">${icon("plus")}Cadastrar animal</button><button class="btn quiet" id="exA">${icon("down")}Exportar lista</button>`)+`
+  <div class="stack-lg">
+    <section class="card"><div class="card-h"><div><h3>Cadastro rápido</h3><p>Vários animais de uma vez pelo número ${porBaia(e)?"da baia":"do brinco"}. Ex.: <span class="num">1-12</span> ou <span class="num">1, 3, 5</span>. Raça, sexo e nascimento você completa depois em Editar.</p></div></div>
+      <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button></div></div></section>
+    <div class="spread"><div class="legend">${counts}</div>${list.length>8?`<input type="search" id="qFind" placeholder="Procurar ${idLbl}, raça…" aria-label="Procurar animal" style="max-width:260px">`:""}</div>
+    <div class="list" id="anList">${list.length?list.map(item).join(""):`<div class="empty">Nenhum animal cadastrado ainda.<span>Use o cadastro rápido acima ou o botão "Cadastrar animal".</span></div>`}</div>
+  </div>`;
+  $("#newA",app).onclick=()=>go({name:"animalForm"});
+  $$("[data-ed]",app).forEach(b=>b.onclick=()=>go({name:"animalForm",id:b.dataset.ed}));
+  const add=()=>{const ids=Data.parseIds($("#qIds",app).value);if(!ids.length)return toast(`Digite os números ${porBaia(e)?"das baias":"dos brincos"}`);
+    const have=new Set(e.animais.map(a=>norm(idOf(e,a)))),dup=[];let n=0;const gid=$("#qG",app).value;
+    for(const id of ids){if(have.has(norm(id))){dup.push(id);continue}have.add(norm(id));e.animais.push(porBaia(e)?{id:uid(),baia:id,brinco:"",grupoId:gid}:{id:uid(),brinco:id,grupoId:gid});n++}
+    save();view.g=gid;render();toast(`${n} animal(is) cadastrado(s)${dup.length?` · já existia(m): ${dup.join(", ")}`:""}`)};
+  $("#qAdd",app).onclick=add;$("#qIds",app).addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();add()}});
+  const f=$("#qFind",app);if(f)f.oninput=()=>{const q=norm(f.value);$$("#anList .item",app).forEach(it=>it.hidden=!!q&&!it.dataset.s.includes(q))};
+  $("#exA",app).onclick=()=>saveFile(`${e.nome} - animais.csv`,toCSV([["Baia","Brinco","Tratamento","Raça","Sexo","Nascimento","Idade (meses)","Observações"],
+    ...list.map(a=>[a.baia||"",a.brinco||"",grupo(e,a.grupoId)?.nome||"",a.raca||"",a.sexo||"",a.nascimento?dmy(parseDay(a.nascimento)):"",isFinite(Data.ageMonths(a.nascimento))?String(Data.ageMonths(a.nascimento)):"",a.obs||""])]));
+};
+
+VIEWS.animalForm=function(){
+  const e=exp();if(!e)return go({name:"animals"});
+  const a=view.id?e.animais.find(x=>x.id===view.id):null;if(view.id&&!a)return go({name:"animals"});
+  const P=a?performance(e).find(p=>p.id===a.id):null,b=porBaia(e);
+  const nPes=a?e.pesagens.filter(p=>isFinite(p.pesos[a.id])).length:0,nObs=a?db.sessions.filter(s=>s.expId===e.id&&(s.animalIds||[]).includes(a.id)).length:0;
+  const racas=RACAS[e.especieId]||[];
+  const fBaia=`<label class="f">Baia${b?"":` <span class="hint">opcional</span>`}<input type="text" id="aBaia" value="${esc(a?.baia||"")}" inputmode="numeric" autocomplete="off"${b?" required":""}></label>`;
+  const fBrinco=`<label class="f">Brinco${b?` <span class="hint">opcional</span>`:""}<input type="text" id="aBrinco" value="${esc(a?.brinco||"")}" autocomplete="off"${b?"":" required"}></label>`;
+  app.innerHTML=pageHead(`${esc(e.nome)} · ${a?"editar animal":"novo animal"}`,a?esc(aName(e,a)):"Cadastrar animal",a?"":"Só a identificação e o tratamento são obrigatórios.",null,"Animais")+`
+  <form class="form" id="f">
+    ${a?`<div class="grid g4">
+      <div class="kpi"><span class="l">Peso atual</span><span class="v num">${fmt(P?.pf,1)}<small>kg</small></span></div>
+      <div class="kpi"><span class="l">GMD</span><span class="v num">${fmt(P?.gmd,2)}<small>kg/dia</small></span></div>
+      <div class="kpi"><span class="l">Pesagens</span><span class="v num">${nPes}</span></div>
+      <div class="kpi"><span class="l">Observações</span><span class="v num">${nObs}</span></div></div>`:""}
+    <div class="card"><div class="fields">
+      ${b?fBaia+fBrinco:fBrinco+fBaia}
+      <label class="f">Tratamento<select id="aG">${e.grupos.map(g=>`<option value="${g.id}"${g.id===(a?.grupoId||view.g)?" selected":""}>${esc(g.nome)}</option>`).join("")}</select></label>
+      <label class="f">Raça<input type="text" id="aRaca" list="racas" value="${esc(a?.raca||"")}" placeholder="${esc(racas[0]||"")}" autocomplete="off"><datalist id="racas">${racas.map(r=>`<option value="${esc(r)}">`).join("")}</datalist></label>
+      <label class="f">Sexo<select id="aSexo"><option value="">—</option>${SEXOS.map(s=>`<option${a?.sexo===s?" selected":""}>${s}</option>`).join("")}</select></label>
+      <label class="f">Data de nascimento <span class="hint" id="aIdade"></span><input type="date" id="aNasc" value="${esc(a?.nascimento||"")}" max="${isoDay(new Date())}"></label>
+    </div>
+    <label class="f">Observações<textarea id="aObs" rows="3" placeholder="Ex.: chegou mancando; veio do lote 3">${esc(a?.obs||"")}</textarea></label></div>
+    <div class="row"><button class="btn primary" type="submit">Salvar</button>${a?"":`<button class="btn" type="submit" data-more>Salvar e cadastrar outro</button>`}${a?`<button type="button" class="btn quiet danger" id="delA">Remover animal</button>`:""}</div>
+  </form>`;
+  wireBack({name:"animals"});
+  const idade=()=>{const m=Data.ageMonths($("#aNasc",app).value);$("#aIdade",app).textContent=isFinite(m)&&m>=0?fmtIdade(m):""};$("#aNasc",app).oninput=idade;idade();
+  (b?$("#aBaia",app):$("#aBrinco",app)).focus();
+  if(a)$("#delA",app).onclick=ev=>{const btn=ev.currentTarget;
+    if(!btn.dataset.armed){btn.dataset.armed=1;btn.textContent=nPes||e.consumo.some(c=>isFinite(c.valores[a.id]))?"Confirmar: remover e apagar as pesagens e o consumo dele?":"Confirmar remoção?";return}
+    removeAnimal(e,a);save();toast("Animal removido");go({name:"animals"})};
+  $("#f",app).onsubmit=ev=>{ev.preventDefault();const more=ev.submitter&&ev.submitter.hasAttribute("data-more");
+    const d={baia:$("#aBaia",app).value.trim(),brinco:$("#aBrinco",app).value.trim(),grupoId:$("#aG",app).value,raca:$("#aRaca",app).value.trim(),sexo:$("#aSexo",app).value,nascimento:$("#aNasc",app).value,obs:$("#aObs",app).value.trim()};
+    const key=b?d.baia:d.brinco;if(!key)return toast(b?"Informe o número da baia":"Informe o brinco");
+    const others=e.animais.filter(x=>x!==a);
+    const same=others.find(x=>norm(idOf(e,x))===norm(key));if(same)return toast(`Já existe: ${aName(e,same)}`);
+    if(d.brinco){const s2=others.find(x=>x.brinco&&norm(x.brinco)===norm(d.brinco));if(s2)return toast(`O brinco ${d.brinco} já está em ${aName(e,s2)}`)}
+    for(const k of ["raca","sexo","nascimento","obs"])if(!d[k])delete d[k];
+    if(a){for(const k of ["raca","sexo","nascimento","obs"])delete a[k];Object.assign(a,d);syncSessionNames(e,a)}
+    else e.animais.push({id:uid(),...d});
+    save();toast(a?"Animal salvo":"Animal cadastrado");
+    go(more?{name:"animalForm",g:d.grupoId}:{name:"animals",g:d.grupoId})};
 };
 
 /* ================= OBSERVAR ================= */
@@ -476,6 +519,7 @@ VIEWS.setup=function(){
       <label class="f">Duração<select id="dur">${[1,2,4,6,8,12,24,48].map(v=>`<option value="${v}"${v===24?" selected":""}>${v} h</option>`).join("")}</select></label>
     </div>
     <div class="stack" style="gap:8px"><span style="font-weight:600;font-size:.86rem;color:var(--ink-2)">Animais que você vai vigiar</span>
+      ${e&&!e.animais.length?`<div class="callout">${icon("info")}<span>Nenhum animal cadastrado neste experimento. <button type="button" class="btn sm" data-go-an>Cadastrar animais</button></span></div>`:""}
       ${e?`<div class="checks">${e.animais.map(a=>`<label class="check"><input type="checkbox" value="${a.id}"><span>${esc(shortName(e,a))}</span><i class="dot" style="background:${gColor(e,a.grupoId)}" title="${esc(grupo(e,a.grupoId)?.nome||"")}"></i></label>`).join("")}</div>
       <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}</div>`
       :`<div class="stack" id="animals" style="gap:8px"></div><div><button type="button" class="btn sm quiet" id="addA">${icon("plus")}Adicionar animal</button></div>`}
@@ -484,6 +528,7 @@ VIEWS.setup=function(){
   </div>
   <div class="row"><button class="btn primary" type="submit">Começar observação</button></div></form>`;
   wireBack({name:"obsHome"});
+  const gan=$("[data-go-an]",app);if(gan)gan.onclick=()=>go({name:"animals"});
   const box=$("#animals",app);
   const count=()=>e?$$(".checks input:checked",app).length:box.children.length;
   const calc=()=>{const i=+$("#int",app).value,h=+$("#dur",app).value,n=count(),k=Math.round(h*60/i);$("#calc",app).textContent=`${k} marcações por animal${n?` · ${k*n} no total para ${n} animal(is)`:""}.`};
@@ -600,7 +645,7 @@ VIEWS.perf=function(){
     <div class="stack"><h3>Consumo</h3><div class="list">${e.consumo.length?[...e.consumo].sort((a,b)=>a.data<b.data?-1:1).map(c=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(c.data))}</div><div class="sub">Média ${fmt(Stats.mean(Object.values(c.valores).filter(isFinite)),1)} kg MS/dia</div></div><button class="btn sm" data-ed="consumo:${c.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhum registro de consumo.</div>`}</div></div>
   </section></div>`;
   $("#lp",app).onclick=()=>go({name:"entry",kind:"peso"});$("#lc",app).onclick=()=>go({name:"entry",kind:"consumo"});
-  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([["Animal","Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA"],...P.map(p=>[p.brinco,p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados"}[p.status],p.cms,p.pv,p.ca])]))};
+  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados"}[p.status],p.cms,p.pv,p.ca])]))};
   $$("[data-ed]",app).forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.ed.split(":");go({name:"entry",kind:k,id})});
 };
 VIEWS.entry=function(){
@@ -682,13 +727,13 @@ VIEWS.stats=function(){
   $("#sv",app).onchange=ev=>{statState.v=ev.target.value;doAnova()};
   $("#sx",app).onchange=ev=>{statState.x=ev.target.value;doCorr()};$("#sy",app).onchange=ev=>{statState.y=ev.target.value;doCorr()};
   doAnova();doCorr();doHeat();
-  $("#exD",app).onclick=()=>saveFile(`${e.nome} - dados por animal.csv`,toCSV([["Animal","Tratamento",...V.map(v=>v.nome)],...D.rows.map(r=>[r.brinco,r.grupo,...V.map(v=>r.v[v.key])])]));
+  $("#exD",app).onclick=()=>saveFile(`${e.nome} - dados por animal.csv`,toCSV([[rot(e),"Tratamento",...V.map(v=>v.nome)],...D.rows.map(r=>[idOf(e,r),r.grupo,...V.map(v=>r.v[v.key])])]));
   // IA
   claude().then(cl=>{const btn=$("#ai",app);if(!btn)return;if(!cl.sample){btn.hidden=true;return}
     let ctl=null;$("#aiStop",app).onclick=()=>ctl&&ctl.abort();
     btn.onclick=async()=>{const box=$("#aiBox",app),out=$("#aiOut",app),stop=$("#aiStop",app);box.hidden=false;out.textContent="Pensando…";btn.disabled=true;stop.hidden=false;ctl=new AbortController();
       const an=statState.anova,co=statState.corr;
-      const tabela=["Animal;Tratamento;"+V.map(v=>v.nome).join(";"),...D.rows.map(r=>[r.brinco,r.grupo,...V.map(v=>isFinite(r.v[v.key])?(+r.v[v.key]).toFixed(2):"")].join(";"))].join("\n");
+      const tabela=[rot(e)+";Tratamento;"+V.map(v=>v.nome).join(";"),...D.rows.map(r=>[idOf(e,r),r.grupo,...V.map(v=>isFinite(r.v[v.key])?(+r.v[v.key]).toFixed(2):"")].join(";"))].join("\n");
       const prompt=`Você é um zootecnista experiente ajudando estudantes de graduação. Interprete, em português do Brasil e linguagem simples, os resultados do experimento "${e.nome}" (${e.especie}; tratamentos: ${e.grupos.map(g=>`${g.nome}${g.dieta?" — "+g.dieta:""}, meta de GMD ${g.gmdMeta} kg/dia`).join("; ")}).
 Comportamento foi registrado por varredura instantânea (scan sampling) e convertido para minutos por dia.
 
@@ -839,7 +884,7 @@ VIEWS.settings=function(){
   $("#bkIn",app).onchange=async ev=>{const f=ev.target.files[0],msg=$("#bkMsg",app);ev.target.value="";if(!f)return;let d;
     try{d=JSON.parse(await f.text());if(d.v!==2||!Array.isArray(d.experiments)||!Array.isArray(d.sessions))throw 0}catch(err){msg.textContent="Esse arquivo não é uma cópia do Etograma.";return}
     msg.innerHTML=`Cópia com ${d.experiments.length} experimento(s) e ${d.sessions.length} observação(ões). Isso substitui tudo o que está neste aparelho. <button class="btn sm primary" id="bkOk">Substituir</button>`;
-    $("#bkOk",app).onclick=()=>{db=d;if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Cópia restaurada");go({name:"dash"})}};
+    $("#bkOk",app).onclick=()=>{db=Data.migrate(d);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Cópia restaurada");go({name:"dash"})}};
   const bd=$("#badDl",app);if(bd){bd.onclick=()=>saveFile(`etograma-dados-nao-lidos-${isoDay(new Date())}.json`,badCopy(),"application/json");
     $("#badRm",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar descarte?";return}try{localStorage.removeItem(KEYBAD)}catch(e){}render()}}
   $("#csvIn",app).onchange=async ev=>{const fs=[...ev.target.files];ev.target.value="";let n=0,dup=0,errs=[];for(const f of fs){try{const r=importCSV(await f.text());n+=r.added;dup+=r.dup}catch(err){errs.push(f.name)}}save();
