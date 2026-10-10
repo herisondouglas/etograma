@@ -13,6 +13,8 @@ const Data=(function(){
   /* ---------- animais ---------- */
   // Identificação principal: número da baia (rotulo "Baia") ou brinco. Se faltar uma, usa a outra.
   const porBaia=e=>e.rotulo==="Baia";
+  // Animal que saiu do experimento (morte, descarte…) tem a.saida = { data, motivo, obs? }: fica no histórico, fora das análises.
+  const ativo=a=>!a.saida;
   const ident=(e,a)=>String((porBaia(e)?(a.baia||a.brinco):(a.brinco||a.baia))||"");
   // "1-12, 15" → ["1",…,"12","15"]. Intervalos só com números inteiros (até 500 de uma vez).
   function parseIds(txt){const out=[];
@@ -47,6 +49,7 @@ const Data=(function(){
       o.ca=isFinite(o.cms)&&o.gmd>0?o.cms/o.gmd:NaN;
       o.pv=isFinite(o.cms)&&isFinite(o.p0)?100*o.cms/((o.p0+o.pf)/2):NaN;
       if(isFinite(o.gmd)&&o.meta>0){o.ratio=o.gmd/o.meta;o.status=o.ratio>=1.1?"acima":o.ratio>=.9?"ok":"abaixo"}else o.status="sem";
+      if(a.saida){o.saida=a.saida;o.status="saiu"}
       return o;});
   }
 
@@ -55,7 +58,9 @@ const Data=(function(){
     if(s.animalIds&&s.animalIds[k]&&e.animais.some(a=>a.id===s.animalIds[k]))return s.animalIds[k];
     // pelo nome salvo na observação ("Baia 7", "07"…): primeiro pela identificação principal, depois pela outra
     const n=norm(s.animais[k]),hit=k=>k&&(n===k||n.endsWith(" "+k));
-    const a=e.animais.find(a=>hit(norm(ident(e,a))))||e.animais.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
+    // animais ativos têm preferência (a baia de um animal que saiu pode ter sido reocupada)
+    const pool=[...e.animais.filter(ativo),...e.animais.filter(a=>!ativo(a))];
+    const a=pool.find(a=>hit(norm(ident(e,a))))||pool.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
   }
   // min/dia = (marcações do comportamento ÷ horários marcados) × 1440
   function behaviorVars(e,sessions){
@@ -73,9 +78,10 @@ const Data=(function(){
   function dataset(e,sessions){
     const P=performance(e),BV=behaviorVars(e,sessions);
     const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
-    const rows=P.map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
+    // quem saiu do experimento não entra na estatística
+    const rows=P.filter(p=>!p.saida).map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
     const vars=[...base,...BV.vars].filter(v=>rows.filter(r=>isFinite(r.v[v.key])).length>=3);
-    return{rows,vars,perf:P};
+    return{rows,vars,perf:P,saidas:P.length-rows.length};
   }
 
   /* ---------- observações ---------- */
@@ -131,7 +137,7 @@ const Data=(function(){
     return out;
   }
 
-  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
+  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
     nSlots,slotDate,marked,sessionSignature,toCSV,sessionCSV,parseCSV,sessionsFromCSV};
 })();
 if(typeof module!=="undefined")module.exports=Data;

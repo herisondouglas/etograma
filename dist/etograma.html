@@ -287,6 +287,8 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 .item.link{width:100%;background:transparent;border:0;border-top:1px solid var(--line);text-align:left;font:inherit;color:inherit;cursor:pointer;flex-wrap:nowrap}
 .item.link:first-child{border-top:0}
 .item.link:hover{background:var(--surface-2)}
+.list.out .item{opacity:.72}
+.page-h h1 .pill{vertical-align:middle;font-family:var(--body);letter-spacing:0}
 .item .chev{width:18px;height:18px;flex:none;transform:scaleX(-1);color:var(--muted)}
 
 </style>
@@ -363,6 +365,8 @@ const Data=(function(){
   /* ---------- animais ---------- */
   // Identificação principal: número da baia (rotulo "Baia") ou brinco. Se faltar uma, usa a outra.
   const porBaia=e=>e.rotulo==="Baia";
+  // Animal que saiu do experimento (morte, descarte…) tem a.saida = { data, motivo, obs? }: fica no histórico, fora das análises.
+  const ativo=a=>!a.saida;
   const ident=(e,a)=>String((porBaia(e)?(a.baia||a.brinco):(a.brinco||a.baia))||"");
   // "1-12, 15" → ["1",…,"12","15"]. Intervalos só com números inteiros (até 500 de uma vez).
   function parseIds(txt){const out=[];
@@ -397,6 +401,7 @@ const Data=(function(){
       o.ca=isFinite(o.cms)&&o.gmd>0?o.cms/o.gmd:NaN;
       o.pv=isFinite(o.cms)&&isFinite(o.p0)?100*o.cms/((o.p0+o.pf)/2):NaN;
       if(isFinite(o.gmd)&&o.meta>0){o.ratio=o.gmd/o.meta;o.status=o.ratio>=1.1?"acima":o.ratio>=.9?"ok":"abaixo"}else o.status="sem";
+      if(a.saida){o.saida=a.saida;o.status="saiu"}
       return o;});
   }
 
@@ -405,7 +410,9 @@ const Data=(function(){
     if(s.animalIds&&s.animalIds[k]&&e.animais.some(a=>a.id===s.animalIds[k]))return s.animalIds[k];
     // pelo nome salvo na observação ("Baia 7", "07"…): primeiro pela identificação principal, depois pela outra
     const n=norm(s.animais[k]),hit=k=>k&&(n===k||n.endsWith(" "+k));
-    const a=e.animais.find(a=>hit(norm(ident(e,a))))||e.animais.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
+    // animais ativos têm preferência (a baia de um animal que saiu pode ter sido reocupada)
+    const pool=[...e.animais.filter(ativo),...e.animais.filter(a=>!ativo(a))];
+    const a=pool.find(a=>hit(norm(ident(e,a))))||pool.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
   }
   // min/dia = (marcações do comportamento ÷ horários marcados) × 1440
   function behaviorVars(e,sessions){
@@ -423,9 +430,10 @@ const Data=(function(){
   function dataset(e,sessions){
     const P=performance(e),BV=behaviorVars(e,sessions);
     const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
-    const rows=P.map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
+    // quem saiu do experimento não entra na estatística
+    const rows=P.filter(p=>!p.saida).map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
     const vars=[...base,...BV.vars].filter(v=>rows.filter(r=>isFinite(r.v[v.key])).length>=3);
-    return{rows,vars,perf:P};
+    return{rows,vars,perf:P,saidas:P.length-rows.length};
   }
 
   /* ---------- observações ---------- */
@@ -481,7 +489,7 @@ const Data=(function(){
     return out;
   }
 
-  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
+  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
     nSlots,slotDate,marked,sessionSignature,toCSV,sessionCSV,parseCSV,sessionsFromCSV};
 })();
 if(typeof module!=="undefined")module.exports=Data;
@@ -616,7 +624,9 @@ const corVar=(cor,i)=>(CORES.find(c=>c[0]===cor)||[])[1]||`var(--s${Math.max(0,i
 const gc=(e,g)=>corVar(g&&g.cor,e.grupos.indexOf(g));
 const gColor=(e,gid)=>gc(e,grupo(e,gid));
 // Identificação dos animais: por baia ("Baia 7") ou por brinco ("Animal 07").
-const porBaia=Data.porBaia;
+const porBaia=Data.porBaia,ativo=Data.ativo;
+const ativos=e=>e.animais.filter(ativo);
+const MOTIVOS=["Morte","Descarte","Doença / tratamento","Venda","Outro"];
 const rot=e=>porBaia(e)?"Baia":"Animal";
 const idOf=(e,x)=>x.ident!=null?x.ident:Data.ident(e,x); // x = animal, linha de desempenho ou de dados
 const aName=(e,x)=>`${rot(e)} ${idOf(e,x)}`;
@@ -763,7 +773,7 @@ function render(){
 }
 const pageHead=(eyebrow,title,sub,actions,back)=>`<div class="page-h">${back?`<button class="crumb" data-back>${icon("back")}${esc(back)}</button>`:""}<span class="eyebrow">${eyebrow}</span><h1>${title}</h1>${sub?`<p class="ink2" style="max-width:62ch">${sub}</p>`:""}${actions?`<div class="row">${actions}</div>`:""}</div>`;
 function wireBack(to){const b=$("[data-back]",app);if(b)b.onclick=()=>go(to)}
-const statusPill=st=>({acima:`<span class="pill good">${icon("arrowUp")}Acima</span>`,ok:`<span class="pill good">${icon("check")}No esperado</span>`,abaixo:`<span class="pill bad">${icon("arrowDown")}Abaixo</span>`,sem:`<span class="pill neutral">${icon("minus")}Sem dados</span>`})[st];
+const statusPill=st=>({acima:`<span class="pill good">${icon("arrowUp")}Acima</span>`,ok:`<span class="pill good">${icon("check")}No esperado</span>`,abaixo:`<span class="pill bad">${icon("arrowDown")}Abaixo</span>`,sem:`<span class="pill neutral">${icon("minus")}Sem dados</span>`,saiu:`<span class="pill neutral">${icon("x")}Saiu</span>`})[st];
 const needExp=()=>`<div class="card"><div class="empty"><h3>Nenhum experimento ativo</h3><p>Crie um experimento para lançar animais, dietas, pesagens e observações.</p><button class="btn primary" id="mkExp">${icon("plus")}Criar experimento</button></div></div>`;
 function wireNeedExp(){const b=$("#mkExp",app);if(b)b.onclick=()=>go({name:"expForm"})}
 
@@ -773,7 +783,8 @@ VIEWS.dash=function(){
   const e=exp();
   if(!e){app.innerHTML=pageHead("Início","Bem-vindo ao Etograma","Registre comportamento, peso e consumo dos animais e veja na hora se o desempenho está dentro do esperado.")+needExp();return wireNeedExp()}
   const P=performance(e),dia=dayDiff(e.inicio,isoDay(new Date()))+1;
-  const gm=P.map(p=>p.gmd).filter(isFinite),abaixo=P.filter(p=>p.status==="abaixo");
+  const PA=P.filter(p=>!p.saida),nSaiu=P.length-PA.length;
+  const gm=PA.map(p=>p.gmd).filter(isFinite),abaixo=PA.filter(p=>p.status==="abaixo");
   const sess=db.sessions.filter(s=>s.expId===e.id);
   const lastP=[...e.pesagens].sort((a,b)=>a.data<b.data?1:-1)[0];
   app.innerHTML=`
@@ -781,7 +792,7 @@ VIEWS.dash=function(){
     <div class="stack" style="gap:8px"><span class="eyebrow">${esc(e.especie)} · ${e.grupos.map(g=>esc(g.nome)).join(" vs ")}${e.exemplo?" · dados de exemplo":""}</span><h1>${esc(e.nome)}</h1></div>
     <div class="facts">
       <div><b class="tnum">Dia ${Math.max(dia,1)}</b><span>início ${dmy(parseDay(e.inicio))}</span></div>
-      <button class="fact" data-go="animais"><b class="tnum">${e.animais.length}</b><span>animais ›</span></button>
+      <button class="fact" data-go="animais"><b class="tnum">${PA.length}</b><span>animais${nSaiu?` · ${nSaiu} saiu`:""} ›</span></button>
       <div><b class="tnum">${e.grupos.length}</b><span>tratamentos</span></div>
       <div><b>${esc(e.responsavel||"—")}</b><span>responsável</span></div>
     </div>
@@ -789,7 +800,7 @@ VIEWS.dash=function(){
   </section>
   <div class="grid g4" style="margin-top:16px">
     <div class="kpi"><span class="l">GMD médio do lote</span><span class="v num">${fmt(gm.length?Stats.mean(gm):NaN,2)}<small>kg/dia</small></span></div>
-    <div class="kpi"><span class="l">Abaixo do esperado</span><span class="v num" style="color:${abaixo.length?"var(--bad)":"var(--good)"}">${abaixo.length}<small>de ${P.length}</small></span></div>
+    <div class="kpi"><span class="l">Abaixo do esperado</span><span class="v num" style="color:${abaixo.length?"var(--bad)":"var(--good)"}">${abaixo.length}<small>de ${PA.length}</small></span></div>
     <div class="kpi"><span class="l">Observações de comportamento</span><span class="v num">${sess.length}<small>registros</small></span></div>
     <div class="kpi"><span class="l">Última pesagem</span><span class="v num" style="font-size:1.5rem">${lastP?dmy(parseDay(lastP.data)):"—"}</span></div>
   </div>
@@ -801,7 +812,7 @@ VIEWS.dash=function(){
     </section>
     <section class="card">
       <div class="card-h"><div><h3>GMD por tratamento</h3><p>Média ± erro-padrão, com a meta de cada dieta.</p></div></div>
-      <div class="viz">${hbars(e.grupos.map((g,i)=>{const v=P.filter(p=>p.grupoId===g.id).map(p=>p.gmd).filter(isFinite);const m=v.length?Stats.mean(v):NaN;return{label:g.nome,value:m,marker:+g.gmdMeta,color:gc(e,g),tip:`${g.nome}: ${fmt(m,2)} kg/dia (n = ${v.length})`}}),{unit:"kg/dia",markerLabel:"Meta"})}</div>
+      <div class="viz">${hbars(e.grupos.map((g,i)=>{const v=PA.filter(p=>p.grupoId===g.id).map(p=>p.gmd).filter(isFinite);const m=v.length?Stats.mean(v):NaN;return{label:g.nome,value:m,marker:+g.gmdMeta,color:gc(e,g),tip:`${g.nome}: ${fmt(m,2)} kg/dia (n = ${v.length})`}}),{unit:"kg/dia",markerLabel:"Meta"})}</div>
       <div class="legend"><span><svg width="14" height="14"><line x1="7" x2="7" y1="1" y2="13" stroke="var(--ink)" stroke-width="2"/></svg>Meta de GMD</span></div>
     </section>
   </div>
@@ -893,30 +904,31 @@ function removeAnimal(e,a){e.animais=e.animais.filter(x=>x!==a);e.pesagens.forEa
 
 VIEWS.animals=function(){
   const e=exp();if(!e){app.innerHTML=pageHead("Animais","Cadastro de animais")+needExp();return wireNeedExp()}
-  const P=Object.fromEntries(performance(e).map(p=>[p.id,p])),list=sortAnimals(e),idLbl=porBaia(e)?"baia":"brinco";
+  const P=Object.fromEntries(performance(e).map(p=>[p.id,p])),all=sortAnimals(e),list=all.filter(ativo),out=all.filter(a=>!ativo(a)),idLbl=porBaia(e)?"baia":"brinco";
   const opts=e.grupos.map(g=>`<option value="${g.id}"${g.id===view.g?" selected":""}>${esc(g.nome)}</option>`).join("");
   const item=a=>{const g=grupo(e,a.grupoId),p=P[a.id]||{},other=porBaia(e)?(a.brinco?`brinco ${a.brinco}`:""):(a.baia?`baia ${a.baia}`:"");
-    const sub=[g?.nome||"Sem tratamento",a.raca,a.sexo,fmtIdade(Data.ageMonths(a.nascimento)),isFinite(p.pf)?`${fmt(p.pf,1)} kg`:""].filter(Boolean).map(esc).join(" · ");
+    const sub=[g?.nome||"Sem tratamento",a.raca,a.sexo,fmtIdade(Data.ageMonths(a.nascimento)),isFinite(p.pf)?`${fmt(p.pf,1)} kg`:"",a.saida?`saiu em ${dmy(parseDay(a.saida.data))}: ${a.saida.motivo}`:""].filter(Boolean).map(esc).join(" · ");
     const search=norm([aName(e,a),a.brinco,a.baia,g?.nome,a.raca,a.sexo,a.obs].join(" "));
     return`<button type="button" class="item link" data-ed="${a.id}" data-s="${esc(search)}" aria-label="Editar ${esc(aName(e,a))}"><span class="dot" style="background:${gColor(e,a.grupoId)};border-radius:50%"></span><div class="grow"><div class="title">${esc(aName(e,a))}${other?` <span class="muted" style="font-weight:500">· ${esc(other)}</span>`:""}</div><div class="sub">${sub}</div></div>${p.status&&p.status!=="sem"?statusPill(p.status):""}<svg class="i chev" viewBox="0 0 24 24" aria-hidden="true">${IC.back}</svg></button>`};
-  const counts=e.grupos.map(g=>`<span><i class="dot" style="background:${gc(e,g)};border-radius:50%"></i>${esc(g.nome)} <b class="num">${e.animais.filter(a=>a.grupoId===g.id).length}</b></span>`).join("");
-  app.innerHTML=pageHead("Animais","Cadastro de animais",`${e.animais.length} animal(is) em <b>${esc(e.nome)}</b>. Corrigir um animal aqui mantém as pesagens, o consumo e as observações dele.`,`<button class="btn primary" id="newA">${icon("plus")}Cadastrar animal</button><button class="btn quiet" id="exA">${icon("down")}Exportar lista</button>`)+`
+  const counts=e.grupos.map(g=>`<span><i class="dot" style="background:${gc(e,g)};border-radius:50%"></i>${esc(g.nome)} <b class="num">${list.filter(a=>a.grupoId===g.id).length}</b></span>`).join("");
+  app.innerHTML=pageHead("Animais","Cadastro de animais",`${list.length} animal(is) em <b>${esc(e.nome)}</b>${out.length?` (e ${out.length} que ${out.length===1?"saiu":"saíram"})`:""}. Corrigir um animal aqui mantém as pesagens, o consumo e as observações dele.`,`<button class="btn primary" id="newA">${icon("plus")}Cadastrar animal</button><button class="btn quiet" id="exA">${icon("down")}Exportar lista</button>`)+`
   <div class="stack-lg">
     <section class="card"><div class="card-h"><div><h3>Cadastro rápido</h3><p>Vários animais de uma vez pelo número ${porBaia(e)?"da baia":"do brinco"}. Ex.: <span class="num">1-12</span> ou <span class="num">1, 3, 5</span>. Raça, sexo e nascimento você completa depois em Editar.</p></div></div>
       <div class="fields"><label class="f">${porBaia(e)?"Baias":"Brincos"}<input type="text" id="qIds" placeholder="1-12" autocomplete="off"></label><label class="f">Tratamento<select id="qG">${opts}</select></label><div class="row" style="align-self:end"><button type="button" class="btn" id="qAdd">${icon("plus")}Cadastrar</button></div></div></section>
     <div class="spread"><div class="legend">${counts}</div>${list.length>8?`<input type="search" id="qFind" placeholder="Procurar ${idLbl}, raça…" aria-label="Procurar animal" style="max-width:260px">`:""}</div>
-    <div class="list" id="anList">${list.length?list.map(item).join(""):`<div class="empty">Nenhum animal cadastrado ainda.<span>Use o cadastro rápido acima ou o botão "Cadastrar animal".</span></div>`}</div>
+    <div class="list" id="anList">${list.length?list.map(item).join(""):`<div class="empty">Nenhum animal ativo cadastrado.<span>Use o cadastro rápido acima ou o botão "Cadastrar animal".</span></div>`}</div>
+    ${out.length?`<section class="stack"><h3>Saíram do experimento</h3><p class="note" style="margin-top:-6px">Continuam no histórico, mas não entram nas médias, nos alertas nem na estatística.</p><div class="list out" id="anOut">${out.map(item).join("")}</div></section>`:""}
   </div>`;
   $("#newA",app).onclick=()=>go({name:"animalForm"});
   $$("[data-ed]",app).forEach(b=>b.onclick=()=>go({name:"animalForm",id:b.dataset.ed}));
   const add=()=>{const ids=Data.parseIds($("#qIds",app).value);if(!ids.length)return toast(`Digite os números ${porBaia(e)?"das baias":"dos brincos"}`);
-    const have=new Set(e.animais.map(a=>norm(idOf(e,a)))),dup=[];let n=0;const gid=$("#qG",app).value;
+    const have=new Set(ativos(e).map(a=>norm(idOf(e,a)))),dup=[];let n=0;const gid=$("#qG",app).value;
     for(const id of ids){if(have.has(norm(id))){dup.push(id);continue}have.add(norm(id));e.animais.push(porBaia(e)?{id:uid(),baia:id,brinco:"",grupoId:gid}:{id:uid(),brinco:id,grupoId:gid});n++}
     save();view.g=gid;render();toast(`${n} animal(is) cadastrado(s)${dup.length?` · já existia(m): ${dup.join(", ")}`:""}`)};
   $("#qAdd",app).onclick=add;$("#qIds",app).addEventListener("keydown",ev=>{if(ev.key==="Enter"){ev.preventDefault();add()}});
-  const f=$("#qFind",app);if(f)f.oninput=()=>{const q=norm(f.value);$$("#anList .item",app).forEach(it=>it.hidden=!!q&&!it.dataset.s.includes(q))};
-  $("#exA",app).onclick=()=>saveFile(`${e.nome} - animais.csv`,toCSV([["Baia","Brinco","Tratamento","Raça","Sexo","Nascimento","Idade (meses)","Observações"],
-    ...list.map(a=>[a.baia||"",a.brinco||"",grupo(e,a.grupoId)?.nome||"",a.raca||"",a.sexo||"",a.nascimento?dmy(parseDay(a.nascimento)):"",isFinite(Data.ageMonths(a.nascimento))?String(Data.ageMonths(a.nascimento)):"",a.obs||""])]));
+  const f=$("#qFind",app);if(f)f.oninput=()=>{const q=norm(f.value);$$("#anList .item, #anOut .item",app).forEach(it=>it.hidden=!!q&&!it.dataset.s.includes(q))};
+  $("#exA",app).onclick=()=>saveFile(`${e.nome} - animais.csv`,toCSV([["Baia","Brinco","Tratamento","Raça","Sexo","Nascimento","Idade (meses)","Observações","Situação","Data de saída","Motivo da saída"],
+    ...all.map(a=>[a.baia||"",a.brinco||"",grupo(e,a.grupoId)?.nome||"",a.raca||"",a.sexo||"",a.nascimento?dmy(parseDay(a.nascimento)):"",isFinite(Data.ageMonths(a.nascimento))?String(Data.ageMonths(a.nascimento)):"",a.obs||"",a.saida?"Saiu":"Ativo",a.saida?dmy(parseDay(a.saida.data)):"",a.saida?[a.saida.motivo,a.saida.obs].filter(Boolean).join(" — "):""])]));
 };
 
 VIEWS.animalForm=function(){
@@ -927,7 +939,7 @@ VIEWS.animalForm=function(){
   const racas=RACAS[e.especieId]||[];
   const fBaia=`<label class="f">Baia${b?"":` <span class="hint">opcional</span>`}<input type="text" id="aBaia" value="${esc(a?.baia||"")}" inputmode="numeric" autocomplete="off"${b?" required":""}></label>`;
   const fBrinco=`<label class="f">Brinco${b?` <span class="hint">opcional</span>`:""}<input type="text" id="aBrinco" value="${esc(a?.brinco||"")}" autocomplete="off"${b?"":" required"}></label>`;
-  app.innerHTML=pageHead(`${esc(e.nome)} · ${a?"editar animal":"novo animal"}`,a?esc(aName(e,a)):"Cadastrar animal",a?"":"Só a identificação e o tratamento são obrigatórios.",null,"Animais")+`
+  app.innerHTML=pageHead(`${esc(e.nome)} · ${a?"editar animal":"novo animal"}`,a?esc(aName(e,a))+(a.saida?" "+statusPill("saiu"):""):"Cadastrar animal",a?"":"Só a identificação e o tratamento são obrigatórios.",null,"Animais")+`
   <form class="form" id="f">
     ${a?`<div class="grid g4">
       <div class="kpi"><span class="l">Peso atual</span><span class="v num">${fmt(P?.pf,1)}<small>kg</small></span></div>
@@ -943,17 +955,19 @@ VIEWS.animalForm=function(){
     </div>
     <label class="f">Observações<textarea id="aObs" rows="3" placeholder="Ex.: chegou mancando; veio do lote 3">${esc(a?.obs||"")}</textarea></label></div>
     <div class="row"><button class="btn primary" type="submit">Salvar</button>${a?"":`<button class="btn" type="submit" data-more>Salvar e cadastrar outro</button>`}${a?`<button type="button" class="btn quiet danger" id="delA">Remover animal</button>`:""}</div>
-  </form>`;
+  </form>
+  ${a?saidaCard(a):""}`;
   wireBack({name:"animals"});
   const idade=()=>{const m=Data.ageMonths($("#aNasc",app).value);$("#aIdade",app).textContent=isFinite(m)&&m>=0?fmtIdade(m):""};$("#aNasc",app).oninput=idade;idade();
   (b?$("#aBaia",app):$("#aBrinco",app)).focus();
+  if(a)wireSaida(e,a);
   if(a)$("#delA",app).onclick=ev=>{const btn=ev.currentTarget;
     if(!btn.dataset.armed){btn.dataset.armed=1;btn.textContent=nPes||e.consumo.some(c=>isFinite(c.valores[a.id]))?"Confirmar: remover e apagar as pesagens e o consumo dele?":"Confirmar remoção?";return}
     removeAnimal(e,a);save();toast("Animal removido");go({name:"animals"})};
   $("#f",app).onsubmit=ev=>{ev.preventDefault();const more=ev.submitter&&ev.submitter.hasAttribute("data-more");
     const d={baia:$("#aBaia",app).value.trim(),brinco:$("#aBrinco",app).value.trim(),grupoId:$("#aG",app).value,raca:$("#aRaca",app).value.trim(),sexo:$("#aSexo",app).value,nascimento:$("#aNasc",app).value,obs:$("#aObs",app).value.trim()};
     const key=b?d.baia:d.brinco;if(!key)return toast(b?"Informe o número da baia":"Informe o brinco");
-    const others=e.animais.filter(x=>x!==a);
+    const others=e.animais.filter(x=>x!==a&&ativo(x)); // a baia de quem saiu pode ser reocupada
     const same=others.find(x=>norm(idOf(e,x))===norm(key));if(same)return toast(`Já existe: ${aName(e,same)}`);
     if(d.brinco){const s2=others.find(x=>x.brinco&&norm(x.brinco)===norm(d.brinco));if(s2)return toast(`O brinco ${d.brinco} já está em ${aName(e,s2)}`)}
     for(const k of ["raca","sexo","nascimento","obs"])if(!d[k])delete d[k];
@@ -962,6 +976,29 @@ VIEWS.animalForm=function(){
     save();toast(a?"Animal salvo":"Animal cadastrado");
     go(more?{name:"animalForm",g:d.grupoId}:{name:"animals",g:d.grupoId})};
 };
+
+function saidaCard(a){
+  if(a.saida)return`<section class="card" style="margin-top:22px"><div class="callout">${icon("info")}<span><b>Saiu do experimento em ${dmy(parseDay(a.saida.data))}</b> · ${esc(a.saida.motivo)}${a.saida.obs?`: ${esc(a.saida.obs)}`:""}. Continua no histórico, mas não entra nas médias, nos alertas nem na estatística.</span></div>
+    <div><button type="button" class="btn sm quiet" id="undoSaida">Desfazer saída (voltar ao experimento)</button></div></section>`;
+  return`<section class="card" style="margin-top:22px"><div class="card-h"><div><h3>Saída do experimento</h3><p>Morte, descarte, doença… O animal sai das médias, dos alertas e da estatística, mas as pesagens e observações dele ficam guardadas.</p></div><button type="button" class="btn sm" id="openSaida">Registrar saída</button></div>
+    <div id="saidaBox" class="stack" hidden><div class="fields">
+      <label class="f">Data da saída<input type="date" id="sData" value="${isoDay(new Date())}" max="${isoDay(new Date())}"></label>
+      <label class="f">Motivo<select id="sMot">${MOTIVOS.map(m=>`<option>${m}</option>`).join("")}</select></label>
+      <label class="f">Detalhe <span class="hint">opcional</span><input type="text" id="sObs" placeholder="Ex.: timpanismo; laudo do veterinário"></label></div>
+      <div class="row"><button type="button" class="btn primary" id="okSaida">Confirmar saída</button><button type="button" class="btn quiet" id="cancelSaida">Cancelar</button></div></div></section>`;
+}
+function wireSaida(e,a){
+  const u=$("#undoSaida",app);
+  if(u)u.onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: voltar o animal ao experimento?";return}
+    if(ativos(e).some(x=>norm(idOf(e,x))===norm(idOf(e,a))))return toast(`${aName(e,a)} já está ocupada por outro animal ativo`);
+    delete a.saida;save();toast("Animal de volta ao experimento");render()};
+  const o=$("#openSaida",app);if(!o)return;
+  o.onclick=()=>{$("#saidaBox",app).hidden=false;o.hidden=true;$("#sData",app).focus()};
+  $("#cancelSaida",app).onclick=()=>{$("#saidaBox",app).hidden=true;o.hidden=false};
+  $("#okSaida",app).onclick=()=>{const data=$("#sData",app).value;if(!data)return toast("Informe a data da saída");
+    const s={data,motivo:$("#sMot",app).value};const obs=$("#sObs",app).value.trim();if(obs)s.obs=obs;
+    a.saida=s;save();toast(`${aName(e,a)} saiu do experimento`);go({name:"animals"})};
+}
 
 /* ================= OBSERVAR ================= */
 function currentSlot(s){const i=Math.floor((Date.now()-s.inicio)/(s.intervalo*60000));return(i>=0&&i<nSlots(s))?i:null}
@@ -977,7 +1014,7 @@ VIEWS.obsHome=function(){
       <div class="progress" title="${f} de ${tot} marcações"><span style="width:${Math.round(100*f/Math.max(tot,1))}%"></span></div></div>
       <button class="btn sm" data-open="${s.id}">Abrir</button><button class="btn sm quiet danger" data-del="${s.id}">Apagar</button></div>`}).join("")}</div>`:"";
   app.innerHTML=pageHead("Observar","Análise comportamental","Escolha o animal, marque o que ele está fazendo a cada intervalo e acompanhe a planilha se formando.")+`
-  ${e?`<section class="card" style="margin-bottom:18px"><div class="card-h"><div><h3>Nova observação em ${esc(e.nome)}</h3><p>${esc(e.especie)} · ${e.animais.length} animais do experimento</p></div><button class="btn primary" id="newExpObs">${icon("plus")}Começar</button></div></section>`:""}
+  ${e?`<section class="card" style="margin-bottom:18px"><div class="card-h"><div><h3>Nova observação em ${esc(e.nome)}</h3><p>${esc(e.especie)} · ${ativos(e).length} animais no experimento</p></div><button class="btn primary" id="newExpObs">${icon("plus")}Começar</button></div></section>`:""}
   <section class="stack" style="margin-bottom:22px"><h3>Observação avulsa</h3><p class="note" style="margin-top:-6px">Sem vínculo com experimento: escolha o animal.</p>
     <div class="species">${db.species.map(s=>`<button class="sp" data-sp="${esc(s.id)}"><span class="gl" aria-hidden="true">${esc(s.nome.charAt(0))}</span><span class="name">${esc(s.nome)}</span><span class="meta">${s.comp.length} comportamentos</span></button>`).join("")}</div>
   </section>
@@ -1009,8 +1046,8 @@ VIEWS.setup=function(){
       <label class="f">Duração<select id="dur">${[1,2,4,6,8,12,24,48].map(v=>`<option value="${v}"${v===24?" selected":""}>${v} h</option>`).join("")}</select></label>
     </div>
     <div class="stack" style="gap:8px"><span style="font-weight:600;font-size:.86rem;color:var(--ink-2)">Animais que você vai vigiar</span>
-      ${e&&!e.animais.length?`<div class="callout">${icon("info")}<span>Nenhum animal cadastrado neste experimento. <button type="button" class="btn sm" data-go-an>Cadastrar animais</button></span></div>`:""}
-      ${e?`<div class="checks">${e.animais.map(a=>`<label class="check"><input type="checkbox" value="${a.id}"><span>${esc(shortName(e,a))}</span><i class="dot" style="background:${gColor(e,a.grupoId)}" title="${esc(grupo(e,a.grupoId)?.nome||"")}"></i></label>`).join("")}</div>
+      ${e&&!ativos(e).length?`<div class="callout">${icon("info")}<span>Nenhum animal cadastrado neste experimento. <button type="button" class="btn sm" data-go-an>Cadastrar animais</button></span></div>`:""}
+      ${e?`<div class="checks">${sortAnimals(e).filter(ativo).map(a=>`<label class="check"><input type="checkbox" value="${a.id}"><span>${esc(shortName(e,a))}</span><i class="dot" style="background:${gColor(e,a.grupoId)}" title="${esc(grupo(e,a.grupoId)?.nome||"")}"></i></label>`).join("")}</div>
       <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}</div>`
       :`<div class="stack" id="animals" style="gap:8px"></div><div><button type="button" class="btn sm quiet" id="addA">${icon("plus")}Adicionar animal</button></div>`}
     </div>
@@ -1113,10 +1150,10 @@ VIEWS.summary=function(){
 /* ================= DESEMPENHO ================= */
 VIEWS.perf=function(){
   const e=exp();if(!e){app.innerHTML=pageHead("Desempenho","Desempenho dos animais")+needExp();return wireNeedExp()}
-  const P=performance(e);const ord={abaixo:0,ok:1,acima:2,sem:3};
+  const P=performance(e);const ord={abaixo:0,ok:1,acima:2,sem:3,saiu:4};
   const sorted=[...P].sort((x,y)=>ord[x.status]-ord[y.status]||(x.ratio||0)-(y.ratio||0));
   const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
-  const series=e.grupos.map((g,i)=>({name:g.nome,color:gc(e,g),pts:pes.map(p=>{const v=e.animais.filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
+  const series=e.grupos.map((g,i)=>({name:g.nome,color:gc(e,g),pts:pes.map(p=>{const v=ativos(e).filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
   app.innerHTML=pageHead("Desempenho","O lote está rendendo o esperado?","GMD = inclinação da reta do peso ao longo dos dias, usando todas as pesagens (com só duas, é (peso atual − peso inicial) ÷ dias). Conversão alimentar = consumo de matéria seca ÷ GMD. Status comparado à meta de GMD de cada tratamento: abaixo de 90% é alerta.",`<button class="btn primary" id="lp">${icon("plus")}Lançar pesagem</button><button class="btn" id="lc">${icon("plus")}Lançar consumo</button><button class="btn quiet" id="ex">${icon("down")}Exportar</button>`)+`
   <div class="stack-lg">
   <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th class="r">Peso inicial</th><th class="r">Peso atual</th><th class="r">Dias</th><th class="r">GMD</th><th class="r">Meta</th><th>Status</th><th class="r">CMS</th><th class="r">CMS %PV</th><th class="r">CA</th></tr></thead><tbody>
@@ -1125,7 +1162,7 @@ VIEWS.perf=function(){
   <p class="note" style="margin-top:-12px">GMD em kg/dia · CMS = consumo de matéria seca, kg/dia · CA em kg MS por kg de ganho.</p>
   <div class="grid g2">
     <section class="card"><div class="card-h"><div><h3>GMD por animal</h3><p>Barra = ganho diário; traço = meta do tratamento.</p></div></div>
-      <div class="viz">${hbars(sorted.filter(p=>isFinite(p.gmd)).map(p=>({label:shortName(e,p),value:p.gmd,marker:p.meta,color:gColor(e,p.grupoId),flag:p.status==="abaixo",tip:`${aName(e,p)} · ${p.grupo}\nGMD ${fmt(p.gmd,2)} kg/dia (${fmt(p.ratio*100,0)}% da meta)`})),{unit:"kg/dia",markerLabel:"Meta"})}</div>
+      <div class="viz">${hbars(sorted.filter(p=>isFinite(p.gmd)&&!p.saida).map(p=>({label:shortName(e,p),value:p.gmd,marker:p.meta,color:gColor(e,p.grupoId),flag:p.status==="abaixo",tip:`${aName(e,p)} · ${p.grupo}\nGMD ${fmt(p.gmd,2)} kg/dia (${fmt(p.ratio*100,0)}% da meta)`})),{unit:"kg/dia",markerLabel:"Meta"})}</div>
       <div class="legend">${e.grupos.map((g,i)=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}<span style="color:var(--bad)">${icon("arrowDown")}Abaixo da meta</span></div></section>
     <section class="card"><div class="card-h"><div><h3>Evolução do peso médio</h3><p>Média de cada tratamento em cada pesagem (kg).</p></div></div>
       ${series.length?`<div class="viz">${lines(series,"kg")}</div><div class="legend">${series.map(s=>`<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`:`<p class="muted">Sem pesagens ainda.</p>`}</section>
@@ -1135,7 +1172,7 @@ VIEWS.perf=function(){
     <div class="stack"><h3>Consumo</h3><div class="list">${e.consumo.length?[...e.consumo].sort((a,b)=>a.data<b.data?-1:1).map(c=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(c.data))}</div><div class="sub">Média ${fmt(Stats.mean(Object.values(c.valores).filter(isFinite)),1)} kg MS/dia</div></div><button class="btn sm" data-ed="consumo:${c.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhum registro de consumo.</div>`}</div></div>
   </section></div>`;
   $("#lp",app).onclick=()=>go({name:"entry",kind:"peso"});$("#lc",app).onclick=()=>go({name:"entry",kind:"consumo"});
-  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados"}[p.status],p.cms,p.pv,p.ca])]))};
+  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA","Situação"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados",saiu:"Saiu"}[p.status],p.cms,p.pv,p.ca,p.saida?`Saiu em ${dmy(parseDay(p.saida.data))} (${p.saida.motivo})`:"Ativo"])]))};
   $$("[data-ed]",app).forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.ed.split(":");go({name:"entry",kind:k,id})});
 };
 VIEWS.entry=function(){
@@ -1144,7 +1181,7 @@ VIEWS.entry=function(){
   app.innerHTML=pageHead(peso?"Pesagem":"Consumo",peso?(ed?"Editar pesagem":"Lançar pesagem"):(ed?"Editar consumo":"Lançar consumo"),peso?"Peso vivo de cada animal, em kg. Deixe em branco quem não foi pesado.":"Consumo médio de matéria seca por animal no período, em kg MS/dia (ofertado − sobras, corrigido pela MS).",null,"Desempenho")+`
   <form id="f" class="stack-lg"><div class="card"><div class="fields"><label class="f">Data<input type="date" id="d" value="${ed?.data||isoDay(new Date())}" required></label></div></div>
   <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th>${peso?"Peso (kg)":"CMS (kg/dia)"}</th></tr></thead><tbody>
-  ${e.animais.map(a=>`<tr><td><b>${esc(shortName(e,a))}</b></td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} · ${esc(aName(e,a))}"></td></tr>`).join("")}
+  ${sortAnimals(e).filter(a=>ativo(a)||vals[a.id]!=null).map(a=>`<tr><td><b>${esc(shortName(e,a))}</b>${ativo(a)?"":` <span class="muted">(saiu)</span>`}</td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} · ${esc(aName(e,a))}"></td></tr>`).join("")}
   </tbody></table></div>
   <div class="row"><button class="btn primary" type="submit">Salvar</button>${ed?`<button type="button" class="btn quiet danger" id="del">Apagar este lançamento</button>`:""}</div></form>`;
   wireBack({name:"perf"});
@@ -1166,7 +1203,7 @@ VIEWS.stats=function(){
   if(!V.find(v=>v.key===statState.y))statState.y=(V.find(v=>v.key==="gmd")||V[1]||V[0]).key;
   const opt=sel=>V.map(v=>`<option value="${v.key}"${v.key===sel?" selected":""}>${esc(v.nome)}</option>`).join("");
   const nB=V.filter(v=>v.comp).length;
-  app.innerHTML=pageHead("Estatística","Análise automática",`Os dados de comportamento, peso e consumo de ${esc(e.nome)} já entram aqui organizados por animal: ${D.rows.length} animais, ${V.length} variáveis${nB?` (${nB} de comportamento, em min/dia)`:""}.`,`<button class="btn" id="exD">${icon("down")}Exportar dados (SAS/R)</button><button class="btn" id="ai">${icon("spark")}Interpretar com IA</button>`)+`
+  app.innerHTML=pageHead("Estatística","Análise automática",`Os dados de comportamento, peso e consumo de ${esc(e.nome)} já entram aqui organizados por animal: ${D.rows.length} animais, ${V.length} variáveis${nB?` (${nB} de comportamento, em min/dia)`:""}.${D.saidas===1?" 1 animal que saiu do experimento não entra na análise.":D.saidas>1?` ${D.saidas} animais que saíram do experimento não entram na análise.`:""}`,`<button class="btn" id="exD">${icon("down")}Exportar dados (SAS/R)</button><button class="btn" id="ai">${icon("spark")}Interpretar com IA</button>`)+`
   <div class="stack-lg">
   <section class="card" id="aiBox" hidden><div class="card-h"><div><h3>Leitura dos resultados</h3><p>Escrita por IA a partir dos números abaixo. Confira antes de usar em trabalho.</p></div><button class="btn sm" id="aiStop" hidden>Parar</button></div><div class="ai-out" id="aiOut"></div></section>
   <section class="card">

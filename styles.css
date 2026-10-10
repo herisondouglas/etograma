@@ -277,4 +277,6 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 .item.link{width:100%;background:transparent;border:0;border-top:1px solid var(--line);text-align:left;font:inherit;color:inherit;cursor:pointer;flex-wrap:nowrap}
 .item.link:first-child{border-top:0}
 .item.link:hover{background:var(--surface-2)}
+.list.out .item{opacity:.72}
+.page-h h1 .pill{vertical-align:middle;font-family:var(--body);letter-spacing:0}
 .item .chev{width:18px;height:18px;flex:none;transform:scaleX(-1);color:var(--muted)}

@@ -73,4 +73,15 @@ assert.strictEqual(D.ageMonths("2024-10-10", new Date(2026, 9, 10)), 24);
 assert.strictEqual(D.ageMonths("2024-10-11", new Date(2026, 9, 10)), 23);
 assert.ok(isNaN(D.ageMonths("")));
 
+// Saída do experimento: status "saiu", fora da estatística; baia reocupada aponta para o animal ativo
+const es = JSON.parse(JSON.stringify(exp));
+es.animais[1].saida = { data: "2026-01-15", motivo: "Morte" };
+const Ps = D.performance(es);
+assert.strictEqual(Ps[1].status, "saiu"); assert.strictEqual(Ps[0].status, "ok");
+const DS = D.dataset(es, []);
+assert.deepStrictEqual(DS.rows.map(r => r.id), ["a1"]); assert.strictEqual(DS.saidas, 1);
+const er = { rotulo: "Baia", animais: [{ id: "velho", baia: "3", saida: { data: "2026-01-01", motivo: "Morte" } }, { id: "novo", baia: "3" }] };
+assert.strictEqual(D.sessionAnimalId(er, { animais: ["Baia 3"] }, 0), "novo");
+assert.ok(!D.ativo(er.animais[0]) && D.ativo(er.animais[1]));
+
 console.log("Dados: todos os testes passaram.");

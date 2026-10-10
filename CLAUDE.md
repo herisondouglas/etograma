@@ -63,7 +63,8 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
     id, nome, especieId, especie, responsavel, inicio: "AAAA-MM-DD", exemplo?,
     rotulo: "Baia" | "Animal",   // como os animais são identificados: "Baia 7" (número da baia) ou "Animal 07" (brinco)
     grupos:  [{ id, nome, dieta, gmdMeta /* kg/dia */, cor: "azul"|"vermelho"|"laranja"|"verde"|"amarelo" }],
-    animais: [{ id, baia, brinco, grupoId, raca?, sexo? /* Macho|Fêmea|Macho castrado */, nascimento? /* AAAA-MM-DD */, obs? }],
+    animais: [{ id, baia, brinco, grupoId, raca?, sexo? /* Macho|Fêmea|Macho castrado */, nascimento? /* AAAA-MM-DD */, obs?,
+                saida?: { data, motivo /* Morte|Descarte|Doença / tratamento|Venda|Outro */, obs? } }],
     // identificação principal = Data.ident(e,a): baia se rotulo "Baia", senão brinco (cai na outra se faltar)
     pesagens:[{ id, data, pesos:   { [animalId]: kg } }],
     consumo: [{ id, data, valores: { [animalId]: kgMS_dia } }]
@@ -79,7 +80,7 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 }
 ```
 
-Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
+Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. **Saída do experimento** (`a.saida`, `Data.ativo`): o animal fica no histórico (pesagens, observações, tabela de desempenho com status "Saiu", CSVs com coluna Situação), mas sai de médias, alertas, KPIs, gráficos por tratamento, nova observação, lançamento de pesagem (salvo se já tem valor nele) e da estatística (`Data.dataset` filtra; a tela avisa quantos ficaram de fora). A baia de quem saiu pode ser reocupada; desfazer a saída é bloqueado se a baia estiver ocupada. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
 
 GMD = inclinação da regressão linear peso × dias com todas as pesagens (com 2 pesagens é igual a (final − inicial)/dias).
 
