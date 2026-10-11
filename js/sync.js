@@ -18,8 +18,9 @@ const Sync=(function(){
     const out=Object.fromEntries(TABLES.map(t=>[t,[]]));
     const exps=db.experiments.filter(e=>!e.exemplo),ids=new Set(exps.map(e=>e.id));
     for(const e of exps){
-      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Baia"?"Baia":"Animal"}); // igual ao app: sem rótulo = identificado pelo brinco
-      (e.grupos||[]).forEach((g,i)=>out.treatments.push({id:g.id,experiment_id:e.id,nome:g.nome||"Tratamento",dieta:nn(g.dieta),gmd_meta:g.gmdMeta!==""&&g.gmdMeta!=null&&isFinite(+g.gmdMeta)?+g.gmdMeta:null,cor:nn(g.cor),ordem:i}));
+      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Baia"?"Baia":"Animal",...(e.config?{config:e.config}:{})}); // igual ao app: sem rótulo = identificado pelo brinco
+      // config (opções da adaptação/análise) e etapas só vão quando existem: experimentos antigos não mudam
+      (e.grupos||[]).forEach((g,i)=>out.treatments.push({id:g.id,experiment_id:e.id,nome:g.nome||"Tratamento",dieta:nn(g.dieta),gmd_meta:g.gmdMeta!==""&&g.gmdMeta!=null&&isFinite(+g.gmdMeta)?+g.gmdMeta:null,cor:nn(g.cor),ordem:i,...(g.etapas?{etapas:g.etapas}:{})}));
       for(const a of e.animais||[])out.animals.push({id:a.id,experiment_id:e.id,treatment_id:nn(a.grupoId),baia:nn(a.baia),brinco:nn(a.brinco),raca:nn(a.raca),sexo:nn(a.sexo),nascimento:nn(a.nascimento),obs:nn(a.obs),saida:a.saida||null});
       for(const p of e.pesagens||[])out.weighings.push({id:p.id,experiment_id:e.id,data:p.data,pesos:p.pesos||{}});
       for(const c of e.consumo||[])out.intakes.push({id:c.id,experiment_id:e.id,data:c.data,valores:c.valores||{}});
@@ -38,13 +39,13 @@ const Sync=(function(){
     for(const r of rows.experiments||[]){if(skip("experiments",r.id)&&!r.deleted)continue;let e=findExp(r.id);
       if(r.deleted){if(e){db.experiments=db.experiments.filter(x=>x!==e);db.sessions=db.sessions.filter(s=>s.expId!==r.id);if(db.active===r.id)db.active=db.experiments[0]?.id||null}continue}
       if(!e){e={id:r.id,grupos:[],animais:[],pesagens:[],consumo:[]};db.experiments.push(e);if(!db.active)db.active=e.id}
-      e.nome=r.nome;e.rotulo=r.rotulo||"Baia";setOpt(e,"especieId",r.especie_id);setOpt(e,"especie",r.especie);setOpt(e,"responsavel",r.responsavel);setOpt(e,"inicio",r.inicio);setOpt(e,"codigo",r.codigo)}
+      e.nome=r.nome;e.rotulo=r.rotulo||"Baia";setOpt(e,"especieId",r.especie_id);setOpt(e,"especie",r.especie);setOpt(e,"responsavel",r.responsavel);setOpt(e,"inicio",r.inicio);setOpt(e,"codigo",r.codigo);if(r.config!==undefined)setOpt(e,"config",r.config)}
     const ordem={};
     const child=(t,list,build)=>{for(const r of rows[t]||[]){const e=findExp(r.experiment_id);if(!e||(skip(t,r.id)&&!r.deleted))continue;
       const arr=e[list],i=arr.findIndex(x=>x.id===r.id);
       if(r.deleted){if(i>=0)arr.splice(i,1);continue}
       const o=i>=0?arr[i]:{id:r.id};build(o,r);if(i<0)arr.push(o)}};
-    child("treatments","grupos",(g,r)=>{g.nome=r.nome;setOpt(g,"dieta",r.dieta);setOpt(g,"cor",r.cor);if(r.gmd_meta==null)delete g.gmdMeta;else g.gmdMeta=+r.gmd_meta;ordem[r.id]=+r.ordem||0});
+    child("treatments","grupos",(g,r)=>{g.nome=r.nome;setOpt(g,"dieta",r.dieta);setOpt(g,"cor",r.cor);if(r.gmd_meta==null)delete g.gmdMeta;else g.gmdMeta=+r.gmd_meta;if(r.etapas!==undefined)setOpt(g,"etapas",r.etapas);ordem[r.id]=+r.ordem||0});
     child("animals","animais",(a,r)=>{a.grupoId=r.treatment_id;a.baia=r.baia??"";a.brinco=r.brinco??"";for(const k of ["raca","sexo","nascimento","obs","saida"])setOpt(a,k,r[k])});
     child("weighings","pesagens",(p,r)=>{p.data=r.data;p.pesos=r.pesos||{}});
     child("intakes","consumo",(c,r)=>{c.data=r.data;c.valores=r.valores||{}});

@@ -123,6 +123,11 @@ create table if not exists public.sessions (
   updated_at    timestamptz not null default now()
 );
 
+-- fase de adaptação (versões novas do app): opções do experimento e etapas de cada tratamento
+-- etapas = [{"inicio":"AAAA-MM-DD","conc":50}, …] (a última é a dieta final; volumoso = 100 − conc)
+alter table public.experiments add column if not exists config jsonb;
+alter table public.treatments  add column if not exists etapas jsonb;
+
 create index if not exists treatments_exp on public.treatments(experiment_id, updated_at);
 create index if not exists animals_exp    on public.animals(experiment_id, updated_at);
 create index if not exists weighings_exp  on public.weighings(experiment_id, updated_at);
@@ -395,4 +400,15 @@ cross join lateral jsonb_array_elements_text(sl.value) cid
 join lateral (select x from jsonb_array_elements(s.comp) x where x->>'id' = cid) cc(c) on true
 where not s.deleted;
 
-grant select on public.vw_animais, public.vw_pesagens, public.vw_consumo, public.vw_marcacoes to authenticated;
+-- uma linha por etapa da dieta (adaptação + dieta final) de cada tratamento
+create or replace view public.vw_etapas with (security_invoker = on) as
+select t.experiment_id as experimento_id, t.id as tratamento_id, t.nome as tratamento,
+       et.n as etapa, (et.n = jsonb_array_length(t.etapas)) as dieta_final,
+       (et.x->>'inicio')::date as inicio, (et.x->>'conc')::numeric as concentrado_pct,
+       100 - (et.x->>'conc')::numeric as volumoso_pct
+from public.treatments t
+join public.experiments e on e.id = t.experiment_id
+cross join lateral (select x, row_number() over (order by x->>'inicio') as n from jsonb_array_elements(t.etapas) x) et
+where not t.deleted and not e.deleted and jsonb_typeof(t.etapas) = 'array';
+
+grant select on public.vw_animais, public.vw_pesagens, public.vw_consumo, public.vw_marcacoes, public.vw_etapas to authenticated;

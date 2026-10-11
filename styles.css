@@ -560,3 +560,35 @@ body.auth main{padding:0;max-width:none}
 .auth-lock svg{width:14px;height:14px}
 .ac-act{width:96px;display:flex;justify-content:flex-end} /* coluna fixa: as etiquetas de papel ficam alinhadas */
 .ac-act{min-height:36px;align-items:center}
+
+/* fase de adaptação */
+.mix{display:flex;align-items:center;gap:10px;flex:none}
+.mix .num{font-size:.84rem;color:var(--ink-2);min-width:76px;text-align:right}
+.mix-bar{display:block;width:96px;height:8px;border-radius:99px;background:var(--line-2);overflow:hidden;flex:none}
+.mix-bar i{display:block;height:100%;background:var(--hay);border-radius:99px 0 0 99px;transition:width .3s}
+.dieta .title .pill{margin-left:6px;vertical-align:1px}
+.dieta .pill svg,.analise .pill svg{width:13px;height:13px}
+.analise h3{font-size:1.05rem}
+.analise{margin-bottom:16px}
+.etp{border:1px solid var(--line);border-radius:var(--r);padding:14px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.etp-h{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px}
+.etp-h .note{margin-left:auto}
+.etp-r{display:grid;grid-template-columns:minmax(0,1fr) 76px 36px;gap:4px 8px;align-items:center}
+.etp-r .etp-n{grid-column:1/-1} /* celular: nome da etapa em cima, data com a largura toda */
+.etp-r .mix-bar,.etp-r .etp-v{display:none}
+.etp-r [data-del]{padding-inline:8px;justify-self:end}
+@container (min-width:560px){.etp-r .etp-n{grid-column:auto}.etp-r{gap:8px;grid-template-columns:70px 170px 96px 120px minmax(0,1fr) 36px}.etp-r .mix-bar{display:block;width:120px}.etp-r .etp-v{display:block}}
+.etp{container-type:inline-size}
+.etp-n{white-space:nowrap;font-family:var(--display);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.etp-c{display:flex;align-items:center;gap:4px}
+.etp-c span{color:var(--muted);font-size:.86rem}
+.etp-v{font-size:.8rem;color:var(--ink-2);white-space:nowrap}
+.etp [data-adde]{align-self:flex-start;margin-left:-10px}
+/* concentrado da dieta final: linha inteira no cartão do tratamento, com a proporção ao lado */
+.conc-f{grid-column:1/-1}
+.conc-row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.conc-row input{max-width:120px}
+.conc-row .mix-bar{width:140px}
+.conc-t{font-size:.86rem;font-weight:500;color:var(--ink-2)}
+.analise .spread{flex-wrap:wrap;gap:12px}
+.analise .grow{flex:1 1 260px}

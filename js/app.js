@@ -34,6 +34,8 @@ const IC={
   film:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4M3 15h4M17 9h4M17 15h4"/>',
   x:'<path d="M6 6l12 12M18 6 6 18"/>',
   cloud:'<path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6-1.4A4.5 4.5 0 0 0 7 18.5z"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  refresh:'<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
   tag:'<path d="M3.5 12.5V5a1.5 1.5 0 0 1 1.5-1.5h7.5l8 8a1.5 1.5 0 0 1 0 2.1l-6.4 6.4a1.5 1.5 0 0 1-2.1 0z"/><circle cx="8" cy="8" r="1.6"/>'
 };
 const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${IC[n]}</svg>`;
@@ -145,9 +147,29 @@ const aName=(e,x)=>`${rot(e)} ${idOf(e,x)}`;
 const shortName=(e,x)=>porBaia(e)?aName(e,x):idOf(e,x);
 
 /* ================= cálculos (funções em js/data.js) ================= */
-const performance=e=>Data.performance(e);
+// Fase de adaptação: com "só dieta final" (padrão), GMD, consumo e comportamento contam a partir da dieta final de cada tratamento.
+const soFinal=e=>Data.temAdaptacao(e)&&(e.config?.analise||"final")==="final";
+const performance=e=>Data.performance(e,{soFinal:soFinal(e)});
 const sessionAnimalId=Data.sessionAnimalId;
-const dataset=e=>Data.dataset(e,db.sessions);
+const dataset=e=>Data.dataset(e,db.sessions,{soFinal:soFinal(e)});
+const pct=v=>(Number.isInteger(+v)?String(+v):fmt(+v,1))+"%";
+const volumoso=e=>e.config?.volumoso||"Silagem";
+// Faixa "Fase de adaptação" em Desempenho e Estatística: escolhe se a adaptação entra na conta
+function analiseBar(e){if(!Data.temAdaptacao(e))return"";const fin=soFinal(e);
+  const d=[...new Set(e.grupos.map(g=>Data.inicioFinal(g)).filter(Boolean))].sort().map(x=>dmy(parseDay(x)));
+  return`<section class="card analise"><div class="spread"><div class="grow"><h3>Fase de adaptação</h3><p class="note">${fin?`Contando só a dieta final (a partir de ${d.join(" / ")}, conforme o tratamento). A adaptação fica fora do GMD, do consumo e do comportamento.`:"Contando o período todo, com a adaptação junto."}</p></div>
+    <div class="seg" role="group" aria-label="Período da análise"><button type="button" data-an="final" aria-pressed="${fin}">Só dieta final</button><button type="button" data-an="todo" aria-pressed="${!fin}">Período todo</button></div></div></section>`}
+function wireAnalise(e){const ph=$(".page-h",app);if(ph&&!$(".analise",app))ph.insertAdjacentHTML("afterend",analiseBar(e));
+  $$("[data-an]",app).forEach(b=>b.onclick=()=>{e.config={...(e.config||{}),analise:b.dataset.an};save();render()})}
+// Início: proporção de concentrado e volumoso de cada tratamento hoje
+function dietaCard(e){const G=e.grupos.filter(g=>Data.etapasDe(g).length);if(!G.length)return"";const hoje=isoDay(new Date()),vol=volumoso(e);
+  return`<section class="card dieta" style="margin-top:16px"><div class="card-h"><div><h3>Dieta agora</h3><p>Concentrado / ${esc(vol.toLowerCase())} de cada tratamento hoje${Data.temAdaptacao(e)?` · análise: ${soFinal(e)?"só a dieta final":"período todo"}`:""}.</p></div><button class="btn sm" data-go="edit">Etapas</button></div>
+  <div class="list">${G.map(g=>{const E=Data.etapasDe(g),st=Data.etapaEm(g,hoje),c=st?st.conc:+E[0].conc;
+    const tag=!st?`<span class="pill neutral">${icon("clock")}Começa ${dmy(parseDay(E[0].inicio))}</span>`:st.final?`<span class="pill good">${icon("check")}${E.length>1?"Dieta final":"Dieta"}</span>`:`<span class="pill warn">${icon("clock")}Adaptação ${st.i+1} de ${st.n-1}</span>`;
+    const falta=st&&st.proxima?dayDiff(hoje,st.proxima):0;
+    const sub=!st?`Primeira etapa: ${pct(c)} de concentrado`:st.proxima?`Próxima troca ${dmy(parseDay(st.proxima))} (${falta===1?"amanhã":`em ${falta} dias`}): ${pct(E[st.i+1].conc)} de concentrado`:E.length>1?`Na dieta final desde ${dmy(parseDay(st.inicio))}`:"Sem fase de adaptação";
+    return`<div class="item"><span class="dot" style="background:${gColor(e,g.id)}"></span><div class="grow"><div class="title">${esc(g.nome)} ${tag}</div><div class="sub">${sub}</div></div>
+      <div class="mix" title="${pct(c)} concentrado · ${pct(100-c)} ${esc(vol.toLowerCase())}"><span class="mix-bar"><i style="width:${c}%"></i></span><span class="num">${pct(c)} / ${pct(100-c)}</span></div></div>`}).join("")}</div></section>`}
 
 /* ================= gráficos (SVG) ================= */
 function cw(full){const cs=getComputedStyle(app);const inner=app.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);const col=full||inner<672?inner:(inner-16)/2;return Math.max(290,Math.min(full?1000:620,Math.round(col-42)))}
@@ -314,6 +336,7 @@ VIEWS.dash=function(){
     </div>
     <div class="row"><button class="btn" data-go="setup">${icon("obs")}Nova observação</button><button class="btn ghost" data-go="peso">${icon("perf")}Lançar pesagem</button><button class="btn ghost" data-go="edit">Editar experimento</button></div>
   </section>
+  ${dietaCard(e)}
   <div class="grid g4" style="margin-top:16px">
     <div class="kpi"><span class="l">GMD médio do lote</span><span class="v num">${fmt(gm.length?Stats.mean(gm):NaN,2)}<small>kg/dia</small></span></div>
     <div class="kpi"><span class="l">Abaixo do esperado</span><span class="v num" style="color:${abaixo.length?"var(--bad)":"var(--good)"}">${abaixo.length}<small>de ${PA.length}</small></span></div>
@@ -380,6 +403,7 @@ VIEWS.expForm=function(){
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
+    ${adCardHtml(ed)}
     ${ed?"":`<section class="card" data-nb id="bCard"><div class="card-h"><div><h3>Dieta de cada baia</h3><p>Toque numa baia para trocar a dieta. As que estão como “escolher” ainda não têm dieta.</p></div></div><div class="bgrid" id="bGrid"></div><p class="note" id="bSum"></p></section>`}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Observadores</h3><p>${ed.codigo?`Código do experimento: <b class="num">${esc(ed.codigo)}</b>. Cada observador cria a conta dele e entra em Ajustes → Entrar em um experimento.`:"Para trabalhar junto com outros observadores, entre na sua conta em Ajustes: depois de enviado ao banco, o experimento ganha um código de convite."}</p></div></div></section>`:""}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Animais</h3><p>${ed.animais.length} cadastrado(s). O cadastro de cada animal (baia, brinco, raça, sexo, nascimento) fica na aba Animais.</p></div><button type="button" class="btn sm" id="toAn">${icon("tag")}Abrir animais</button></div></section>`:""}
@@ -388,7 +412,42 @@ VIEWS.expForm=function(){
   wireBack({name:"dash"});
   const gs=$("#gs",app);
   const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",cor:$('[data-k="cor"]',c).value}));
-  const refresh=()=>{$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});if(!ed)paintGrid()};
+  const refresh=()=>{$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});if(!ed)paintGrid();if(window.__adPaint)window.__adPaint()};
+  /* fase de adaptação: etapas de cada tratamento (gid → [{inicio, conc}]). Enquanto ninguém mexe na tabela,
+     ela acompanha as opções; depois de editada à mão, só muda com "Refazer com estas opções". */
+  const etp={};let manual=false;
+  (ed?ed.grupos:[]).forEach(g=>{if(g.etapas&&g.etapas.length)etp[g.id]=Data.etapasDe(g).map(x=>({...x}))});
+  if(ed&&Data.temAdaptacao(ed))manual=true;
+  const num=(id,d)=>{const v=parseFloat(String($(id,app).value).replace(",","."));return isFinite(v)?v:d};
+  const finalDe=c=>{const v=parseFloat(String($('[data-k="conc"]',c).value).replace(",","."));return isFinite(v)&&v>=0&&v<=100?v:NaN};
+  const adOn=()=>$("#adOn",app).value==="1";
+  function gerar(c){const fim=finalDe(c);if(!isFinite(fim))return[];const ini=$("#xIni",app).value||isoDay(new Date());
+    return adOn()?Data.gerarEtapas({inicio:ini,ini:num("#adIni",50),fim,passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value}):[{inicio:ini,conc:fim}]}
+  function adOpts(force){$$("[data-ad]",app).forEach(x=>x.hidden=!adOn());
+    $$("[data-gid]",gs).forEach(c=>{if(force||!manual||!etp[c.dataset.gid])etp[c.dataset.gid]=gerar(c)});if(force)manual=false;adPaint()}
+  function adPaint(){const box=$("#adBox",app);if(!box)return;const vol=($("#adVol",app).value.trim()||"Silagem").toLowerCase();
+    $$("[data-gid]",gs).forEach(c=>{const v=finalDe(c),ok=isFinite(v);$(".conc-f .mix-bar i",c).style.width=(ok?v:0)+"%";$(".conc-t",c).textContent=ok?`${pct(v)} concentrado / ${pct(Math.round((100-v)*10)/10)} ${vol}`:"preencha de 0 a 100"});
+    $("#adGen",app).classList.toggle("primary",manual);
+    box.innerHTML=$$("[data-gid]",gs).map(c=>{const gid=c.dataset.gid,E=etp[gid]||[],cor=corVar($('[data-k="cor"]',c).value,0),nome=$('[data-k="nome"]',c).value.trim()||"Tratamento";
+      return`<div class="etp" data-eg="${gid}"><div class="etp-h"><i class="dot" style="background:${cor}"></i><b>${esc(nome)}</b><span class="note">${E.length?(E.length>1?`${E.length-1} ${E.length===2?"etapa":"etapas"} de adaptação + dieta final`:"só a dieta final"):"preencha o concentrado da dieta final"}</span></div>
+        ${E.map((x,k)=>`<div class="etp-r" data-k="${k}"><span class="etp-n">${k===E.length-1?"Final":"Etapa "+(k+1)}</span><input type="date" data-f="inicio" value="${esc(x.inicio)}" aria-label="Início da etapa ${k+1}">
+          <label class="etp-c"><input type="number" data-f="conc" min="0" max="100" step="1" inputmode="decimal" value="${x.conc}" aria-label="Concentrado (%) na etapa ${k+1}"><span>%</span></label>
+          <span class="mix-bar" aria-hidden="true"><i style="width:${Math.max(0,Math.min(100,+x.conc))}%"></i></span><span class="etp-v num">${pct(Math.round((100-x.conc)*10)/10)} ${esc(vol)}</span>
+          <button type="button" class="btn sm quiet" data-del="${k}" aria-label="Tirar etapa ${k+1}"${E.length<2?" disabled":""}>${icon("x")}</button></div>`).join("")}
+        ${E.length?`<button type="button" class="btn sm quiet" data-adde>${icon("plus")}Etapa</button>`:""}</div>`}).join("")}
+  window.__adPaint=adPaint;cleanup.push(()=>{delete window.__adPaint});
+  // editar à mão: muda só o número na tela (não redesenha, para não perder o foco)
+  $("#adBox",app).addEventListener("input",ev=>{const r=ev.target.closest(".etp-r"),g=ev.target.closest("[data-eg]");if(!r||!g)return;
+    const x=etp[g.dataset.eg][+r.dataset.k];if(ev.target.dataset.f==="inicio")x.inicio=ev.target.value;
+    else{const v=parseFloat(String(ev.target.value).replace(",","."));x.conc=isFinite(v)?v:x.conc;$(".mix-bar i",r).style.width=Math.max(0,Math.min(100,x.conc))+"%";$(".etp-v",r).textContent=pct(Math.round((100-x.conc)*10)/10)+" "+($("#adVol",app).value.trim()||"Silagem").toLowerCase()}
+    if(!manual){manual=true;$("#adGen",app).classList.add("primary")}});
+  $("#adBox",app).addEventListener("click",ev=>{const g=ev.target.closest("[data-eg]");if(!g)return;const E=etp[g.dataset.eg];
+    const del=ev.target.closest("[data-del]"),add=ev.target.closest("[data-adde]");
+    if(del&&E.length>1){E.splice(+del.dataset.del,1);manual=true;adPaint()}
+    if(add){const L=Data.etapasDe({etapas:E}).at(-1);E.push({inicio:Data.addDays(L.inicio,Math.max(1,Math.round(num("#adDias",7)))),conc:L.conc});manual=true;adPaint()}});
+  ["#adOn","#adIni","#adPasso","#adDias","#adAbaixo","#xIni"].forEach(id=>{const el=$(id,app);if(el)el.addEventListener(id==="#adOn"||id==="#adAbaixo"?"change":"input",()=>adOpts(id==="#adOn"))});
+  $("#adVol",app).addEventListener("input",adPaint);
+  $("#adGen",app).onclick=()=>adOpts(true);
   // Dieta de cada baia ao criar: asg[k] = id do tratamento da baia k+1, ou null (“escolher”).
   const asg=[];
   const nbN=()=>Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0)));
@@ -405,15 +464,16 @@ VIEWS.expForm=function(){
     const falta=asg.filter(g=>!g).length;
     $("#bSum",app).textContent=G.map(g=>`${g.nome}: ${asg.filter(x=>x===g.id).length}`).join(" · ")+(falta?` · ${falta} sem dieta`:"")}
   function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
-    c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
+    c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label><label class="f conc-f">Concentrado na dieta final <span class="hint">% de concentrado; o resto é volumoso (silagem, feno…)</span><span class="conc-row"><input type="number" step="1" min="0" max="100" inputmode="decimal" data-k="conc" value="${concDe(g)}" placeholder="Ex.: 80"><span class="mix-bar" aria-hidden="true"><i></i></span><span class="conc-t"></span></span></label></div>
     <div class="card-foot"><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
     $('[data-k="cor"]',c).addEventListener("change",refresh);
     $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
       if(ed&&ed.animais.some(a=>a.grupoId===g.id))return toast("Há animais neste tratamento: mude o tratamento deles na aba Animais antes");
       c.remove();refresh()};
     $('[data-k="nome"]',c).addEventListener("input",refresh);
+    $('[data-k="conc"]',c).addEventListener("input",()=>adOpts());
     gs.appendChild(c)}
-  grupos.forEach(addG);refresh();
+  grupos.forEach(addG);refresh();adOpts();
   const rotSel=$("#xRot",app),showNB=()=>$$("[data-nb]",app).forEach(l=>l.hidden=rotSel.value!=="Baia");rotSel.onchange=showNB;showNB();
   if(!ed){fillBaias(1);
     $("#xNB",app).addEventListener("input",()=>fillBaias(asg.length+1)); // novas baias seguem a regra; as já ajustadas ficam
@@ -421,14 +481,23 @@ VIEWS.expForm=function(){
     const divH=()=>{$("#xDivH",app).textContent={curral:"Azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12. Da 13 em diante você escolhe.",alt:"1ª dieta nas baias 1, 3, 5…; 2ª nas baias 2, 4, 6…",seq:"1ª metade das baias na 1ª dieta, 2ª metade na 2ª."}[$("#xDiv",app).value]};divH();
     $("#xDiv",app).onchange=()=>{divH();asg.length=0;fillBaias(1)};
     $("#bGrid",app).addEventListener("click",ev=>{const b=ev.target.closest("[data-b]");if(!b)return;const G=groups(),k=+b.dataset.b,i=G.findIndex(g=>g.id===asg[k]);asg[k]=G[(i+1)%G.length].id;paintGrid()})}
-  $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
+  $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh();adOpts()};
   if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
     $("#delX",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent=Cloud.user&&ed.codigo?"Confirmar: apagar experimento e seus registros (também no banco, para todos)?":"Confirmar: apagar experimento e seus registros?";return}
       db.experiments=db.experiments.filter(x=>x!==ed);db.sessions=db.sessions.filter(s=>s.expId!==ed.id);db.active=db.experiments[0]?.id||null;save();toast("Experimento apagado");go({name:"dash"})}}
   $("#f",app).onsubmit=ev=>{ev.preventDefault();
     const sp=db.species.find(s=>s.id===$("#xSp",app).value);
     const G=$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",dieta:$('[data-k="dieta"]',c).value.trim(),gmdMeta:parseFloat(String($('[data-k="gmdMeta"]',c).value).replace(",","."))||0,cor:$('[data-k="cor"]',c).value}));
-    const data={nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
+    // fase de adaptação: confere as etapas de cada tratamento
+    const vol=$("#adVol",app).value.trim()||"Silagem";
+    for(const g of G){const c=$(`[data-gid="${g.id}"]`,gs),fim=finalDe(c);
+      let E=adOn()?(etp[g.id]||[]).map(x=>({inicio:x.inicio,conc:+x.conc})):(isFinite(fim)?[{inicio:$("#xIni",app).value,conc:fim}]:[]);
+      const ruim=E.find(x=>!/^\d{4}-\d{2}-\d{2}$/.test(x.inicio)||!(x.conc>=0&&x.conc<=100));
+      if(ruim){toast(`${g.nome}: confira as datas e as porcentagens das etapas (0 a 100%).`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
+      E=Data.etapasDe({etapas:E});if(new Set(E.map(x=>x.inicio)).size<E.length){toast(`${g.nome}: duas etapas no mesmo dia.`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
+      if(E.length){g.etapas=E;const F=E[E.length-1].conc;if(!g.dieta)g.dieta=`${pct(F)} concentrado / ${pct(100-F)} ${vol.toLowerCase()}`}}
+    const config={...(ed?.config||{}),adapt:adOn(),ini:num("#adIni",50),passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value,analise:$("#adAn",app).value,volumoso:vol};
+    const data={config,nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
     else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
       // já cria Baia 1…N (um animal por baia), divididas entre as dietas; tudo pode ser corrigido na aba Animais
@@ -439,6 +508,26 @@ VIEWS.expForm=function(){
       db.experiments.push(x);db.active=x.id;save();toast(nb?`Experimento criado com ${nb} baias. Confira a dieta de cada uma.`:"Experimento criado. Agora cadastre os animais.");go({name:"animals"})}
   };
 };
+
+// Concentrado da dieta final: da última etapa, ou o número do nome/descrição ("Dieta 80%", "80% de concentrado")
+function concDe(g){const E=Data.etapasDe(g);if(E.length)return E[E.length-1].conc;const m=/(\d+(?:[.,]\d+)?)\s*%/.exec((g.nome||"")+" "+(g.dieta||""));return m?parseFloat(m[1].replace(",",".")):""}
+// Opções da fase de adaptação (ao criar e ao editar o experimento)
+function adCardHtml(ed){const c=ed?.config||{},on=ed?(c.adapt??Data.temAdaptacao(ed)):true,o=(v,l,s)=>`<option value="${v}"${v===s?" selected":""}>${l}</option>`;
+  return`<section class="card" id="adCard"><div class="card-h"><div><h3>Fase de adaptação</h3><p>Troca gradual da proporção de concentrado e volumoso até a dieta final. Escolha as opções e o app monta as etapas de cada dieta; qualquer data ou porcentagem pode ser mudada.</p></div></div>
+    <div class="fields">
+      <label class="f">Tem fase de adaptação?<select id="adOn">${o("1","Sim",on?"1":"0")}${o("0","Não, começa na dieta final",on?"1":"0")}</select></label>
+      <label class="f">Volumoso<input type="text" id="adVol" value="${esc(c.volumoso||"Silagem")}" list="volList" autocomplete="off"><datalist id="volList"><option>Silagem</option><option>Silagem de milho</option><option>Silagem de sorgo</option><option>Feno</option><option>Capim picado</option></datalist><span class="hint">o que completa a dieta</span></label>
+      <label class="f">Na análise<select id="adAn">${o("final","Só a dieta final",c.analise||"final")}${o("todo","Período todo",c.analise||"final")}</select><span class="hint">GMD, consumo, comportamento e estatística; dá para trocar depois</span></label>
+    </div>
+    <div class="fields" data-ad>
+      <label class="f">Concentrado no começo (%)<input type="number" id="adIni" value="${c.ini??50}" min="0" max="100" inputmode="decimal"></label>
+      <label class="f">Muda a cada etapa (%)<input type="number" id="adPasso" value="${c.passo??10}" min="1" max="100" inputmode="decimal"><span class="hint">pontos de concentrado por troca</span></label>
+      <label class="f">Dias em cada etapa<input type="number" id="adDias" value="${c.dias??7}" min="1" max="90" inputmode="numeric"></label>
+      <label class="f">Dieta abaixo do começo<select id="adAbaixo">${o("desce","Desce até a final",c.abaixo||"desce")}${o("direto","Já começa na final",c.abaixo||"desce")}</select><span class="hint">ex.: Dieta 40% com começo em 50%</span></label>
+    </div>
+    <div class="stack" data-ad style="gap:10px"><div class="spread"><h3 style="font-size:1.05rem">Etapas de cada dieta</h3><button type="button" class="btn sm" id="adGen">${icon("refresh")}Refazer com estas opções</button></div>
+      <p class="note">As dietas trocam nos mesmos dias, mas cada uma pode ter datas diferentes: é só mudar na tabela. A última etapa é a dieta final, que vale até o fim.</p>
+      <div id="adBox" class="stack" style="gap:12px"></div></div></section>`}
 
 /* ================= ANIMAIS (cadastro) ================= */
 const RACAS={vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
@@ -727,7 +816,8 @@ VIEWS.perf=function(){
     <div class="stack"><h3>Consumo</h3><div class="list">${e.consumo.length?[...e.consumo].sort((a,b)=>a.data<b.data?-1:1).map(c=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(c.data))}</div><div class="sub">Média ${fmt(Stats.mean(Object.values(c.valores).filter(isFinite)),1)} kg MS/dia</div></div><button class="btn sm" data-ed="consumo:${c.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhum registro de consumo.</div>`}</div></div>
   </section></div>`;
   $("#lp",app).onclick=()=>go({name:"entry",kind:"peso"});$("#lc",app).onclick=()=>go({name:"entry",kind:"consumo"});
-  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA","Situação"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados",saiu:"Saiu"}[p.status],p.cms,p.pv,p.ca,p.saida?`Saiu em ${dmy(parseDay(p.saida.data))} (${p.saida.motivo})`:"Ativo"])]))};
+  wireAnalise(e);
+  $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA","Situação","Período analisado"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados",saiu:"Saiu"}[p.status],p.cms,p.pv,p.ca,p.saida?`Saiu em ${dmy(parseDay(p.saida.data))} (${p.saida.motivo})`:"Ativo",p.desde?`Dieta final (desde ${dmy(parseDay(p.desde))})`:"Todo"])]))};
   $$("[data-ed]",app).forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.ed.split(":");go({name:"entry",kind:k,id})});
 };
 VIEWS.entry=function(){
@@ -752,7 +842,7 @@ function corrWords(r,p){const a=Math.abs(r);const f=a<.3?"fraca":a<.6?"moderada"
 VIEWS.stats=function(){
   const e=exp();if(!e){app.innerHTML=pageHead("Estatística","Análise estatística")+needExp();return wireNeedExp()}
   const D=dataset(e);
-  if(D.vars.length<1){app.innerHTML=pageHead("Estatística","Análise estatística","Ainda não há dados suficientes. Lance pesagens, consumo ou observações de comportamento.");return}
+  if(D.vars.length<1){app.innerHTML=pageHead("Estatística","Análise estatística","Ainda não há dados suficientes. Lance pesagens, consumo ou observações de comportamento.");wireAnalise(e);return}
   const V=D.vars;if(!V.find(v=>v.key===statState.v))statState.v=(V.find(v=>v.key==="gmd")||V[0]).key;
   if(!V.find(v=>v.key===statState.x))statState.x=(V.find(v=>v.key==="b:ruminando")||V[0]).key;
   if(!V.find(v=>v.key===statState.y))statState.y=(V.find(v=>v.key==="gmd")||V[1]||V[0]).key;
@@ -809,6 +899,7 @@ VIEWS.stats=function(){
   $("#sv",app).onchange=ev=>{statState.v=ev.target.value;doAnova()};
   $("#sx",app).onchange=ev=>{statState.x=ev.target.value;doCorr()};$("#sy",app).onchange=ev=>{statState.y=ev.target.value;doCorr()};
   doAnova();doCorr();doHeat();
+  wireAnalise(e);
   $("#exD",app).onclick=()=>saveFile(`${e.nome} - dados por animal.csv`,toCSV([[rot(e),"Tratamento",...V.map(v=>v.nome)],...D.rows.map(r=>[idOf(e,r),r.grupo,...V.map(v=>r.v[v.key])])]));
   // IA
   claude().then(cl=>{const btn=$("#ai",app);if(!btn)return;if(!cl.sample){btn.hidden=true;return}
@@ -1013,6 +1104,7 @@ function ptErr(e){const m=String(e&&(e.message||e)||"");
     [/for security purposes|rate limit|too many/i,"Muitas tentativas seguidas. Espere um minuto e tente de novo."],[/unable to validate email|invalid email/i,"E-mail inválido."],
     [/fetch|network|load failed/i,"Sem internet. Tente de novo quando tiver sinal."],[/código não encontrado/i,"Código não encontrado. Confira com o responsável."],
     [/row-level security|permission denied/i,"Sem permissão para essa alteração."],
+    [/could not find the .(config|etapas). column|schema cache/i,"O banco precisa ser atualizado para a fase de adaptação: rode de novo o supabase/schema.sql no SQL Editor."],
     [/EMAIL_SEM_ACESSO|database error saving new user/i,"Este e-mail não tem acesso ao Etograma. Peça ao administrador para incluir você na lista."]];
   for(const[r,t]of map)if(r.test(m))return t;return m||"Algo deu errado."}
 

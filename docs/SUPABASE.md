@@ -16,6 +16,7 @@ no mesmo experimento vê as mudanças dos outros quase na hora.
 1. No menu da esquerda, abra **SQL Editor** → **New query**.
 2. Abra o arquivo [`supabase/schema.sql`](../supabase/schema.sql) deste projeto, copie **tudo**, cole e clique em **Run**.
 3. Deve aparecer "Success". Pode rodar de novo no futuro (quando o app ganhar tabelas novas) sem perder dados.
+4. **Atualizações:** quando o app ganha campos novos (ex.: fase de adaptação: `config` e `etapas`), rode o `schema.sql` inteiro de novo. Se o app mostrar "O banco precisa ser atualizado", é isso que falta.
 
 ## 2b. Lista de acessos (quem pode usar o app)
 
@@ -91,6 +92,7 @@ O banco tem quatro "visões" já organizadas em formato longo (uma linha por med
 | `vw_pesagens` | pesagem de um animal (data, peso em kg) |
 | `vw_consumo` | consumo de um animal (data, kg MS/dia) |
 | `vw_marcacoes` | X marcado na planilha do etograma (animal, horário, comportamento) |
+| `vw_etapas` | etapa da dieta de um tratamento (início, % concentrado, % volumoso, se é a dieta final) |
 
 - **Planilha:** no Supabase, **Table Editor** → escolha a visão → **Export → CSV**.
 - **R:** em **Project Settings → Database** copie os dados de conexão e use:

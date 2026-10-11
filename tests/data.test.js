@@ -84,4 +84,36 @@ const er = { rotulo: "Baia", animais: [{ id: "velho", baia: "3", saida: { data: 
 assert.strictEqual(D.sessionAnimalId(er, { animais: ["Baia 3"] }, 0), "novo");
 assert.ok(!D.ativo(er.animais[0]) && D.ativo(er.animais[1]));
 
+// Fase de adaptação: 50 → 60 → 70 → 80% de concentrado, uma etapa por semana
+const E80 = D.gerarEtapas({ inicio: "2026-09-01", ini: 50, fim: 80, passo: 10, dias: 7 });
+assert.deepStrictEqual(E80.map(x => x.inicio + ":" + x.conc), ["2026-09-01:50", "2026-09-08:60", "2026-09-15:70", "2026-09-22:80"]);
+assert.deepStrictEqual(D.gerarEtapas({ inicio: "2026-09-01", ini: 50, fim: 40, passo: 10, dias: 7 }).map(x => x.conc), [50, 40], "abaixo do início: desce");
+assert.deepStrictEqual(D.gerarEtapas({ inicio: "2026-09-01", ini: 50, fim: 40, passo: 10, dias: 7, abaixo: "direto" }).map(x => x.conc), [40], "ou já começa na final");
+assert.deepStrictEqual(D.gerarEtapas({ inicio: "2026-09-01", ini: 50, fim: 75, passo: 10, dias: 5 }).map(x => x.inicio + ":" + x.conc), ["2026-09-01:50", "2026-09-06:60", "2026-09-11:70", "2026-09-16:75"], "passo que não fecha certinho");
+assert.strictEqual(D.gerarEtapas({ inicio: "2026-09-01", ini: 80, fim: 80, passo: 10, dias: 7 }).length, 1, "sem adaptação");
+assert.strictEqual(D.gerarEtapas({ inicio: "2026-10-28", ini: 50, fim: 60, passo: 10, dias: 7 })[1].inicio, "2026-11-04", "vira o mês");
+const gA = { etapas: E80 };
+assert.strictEqual(D.etapaEm(gA, "2026-08-31"), null);
+assert.deepStrictEqual(D.etapaEm(gA, "2026-09-10"), { i: 1, n: 4, conc: 60, vol: 40, final: false, inicio: "2026-09-08", proxima: "2026-09-15" });
+assert.ok(D.etapaEm(gA, "2026-12-01").final && D.etapaEm(gA, "2026-12-01").proxima === null);
+assert.strictEqual(D.inicioFinal(gA), "2026-09-22"); assert.strictEqual(D.inicioFinal({ etapas: [{ inicio: "2026-09-01", conc: 40 }] }), null);
+// etapas fora de ordem (editadas à mão) são ordenadas pela data
+assert.strictEqual(D.etapaEm({ etapas: [E80[3], E80[0], E80[2], E80[1]] }, "2026-09-16").conc, 70);
+
+// Análise só com a dieta final: GMD, consumo e comportamento começam no dia da dieta final do tratamento
+const ad = { id: "ad", rotulo: "Baia", grupos: [{ id: "g8", nome: "Dieta 80%", gmdMeta: 1.5, etapas: E80 }, { id: "g4", nome: "Dieta 40%", gmdMeta: 1, etapas: [{ inicio: "2026-09-01", conc: 40 }] }],
+  animais: [{ id: "b1", baia: "1", grupoId: "g8" }, { id: "b2", baia: "2", grupoId: "g4" }],
+  pesagens: [{ data: "2026-09-01", pesos: { b1: 300, b2: 300 } }, { data: "2026-09-22", pesos: { b1: 310, b2: 321 } }, { data: "2026-10-22", pesos: { b1: 355, b2: 351 } }],
+  consumo: [{ data: "2026-09-10", valores: { b1: 5, b2: 7 } }, { data: "2026-10-01", valores: { b1: 9, b2: 8 } }] };
+assert.ok(D.temAdaptacao(ad));
+const todo = D.performance(ad), fin = D.performance(ad, { soFinal: true });
+assert.strictEqual(fin[0].desde, "2026-09-22"); assert.strictEqual(fin[0].p0, 310); assert.ok(Math.abs(fin[0].gmd - 1.5) < 1e-9, "GMD só da dieta final");
+assert.ok(Math.abs(todo[0].gmd - 1.5) > 0.1, "com a adaptação o GMD muda"); assert.strictEqual(fin[0].cms, 9); assert.strictEqual(todo[0].cms, 7);
+assert.strictEqual(fin[1].desde, null); assert.strictEqual(fin[1].gmd, todo[1].gmd, "tratamento sem adaptação não muda");
+const sAd = { expId: "ad", animais: ["Baia 1"], animalIds: ["b1"], comp: [{ id: "r", nome: "Ruminando" }, { id: "o", nome: "Ócio" }], intervalo: 5,
+  inicio: D.parseDay("2026-09-21").getTime() + 23 * 3600e3 + 55 * 60e3, // 23:55 do último dia de adaptação
+  marks: { 0: { 0: ["o"], 1: ["r"], 2: ["r"] } } }; // 23:55 (adaptação), 00:00 e 00:05 (dieta final)
+assert.strictEqual(D.behaviorVars(ad, [sAd]).by.b1["b:ruminando"], 2 / 3 * 1440);
+assert.strictEqual(D.behaviorVars(ad, [sAd], { soFinal: true }).by.b1["b:ruminando"], 1440, "marcação da adaptação fica de fora");
+
 console.log("Dados: todos os testes passaram.");

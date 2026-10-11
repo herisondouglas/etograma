@@ -27,6 +27,30 @@ const Data=(function(){
   function migrate(d){
     for(const e of d.experiments||[])if(porBaia(e))for(const a of e.animais||[])if(a.baia==null){a.baia=a.brinco;a.brinco=""}
     return d}
+  /* ---------- fase de adaptação ----------
+     g.etapas = [{inicio:"AAAA-MM-DD", conc:%}] em ordem de data; a última é a dieta final.
+     Volumoso (silagem, feno…) = 100 − concentrado. Uma etapa só = sem adaptação. */
+  const iso=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+  const addDays=(s,n)=>{const d=parseDay(s);d.setDate(d.getDate()+n);return iso(d)};
+  const r1=x=>Math.round(x*10)/10;
+  // De ini% até fim% de concentrado, mudando "passo" pontos a cada "dias" dias. Se ini é maior que fim, desce.
+  // abaixo="direto": dieta que fica abaixo do início já começa na final (ex.: Dieta 40% com início 50%).
+  function gerarEtapas({inicio,ini,fim,passo,dias,abaixo="desce"}){
+    fim=r1(+fim);ini=+ini;passo=Math.abs(+passo);dias=Math.max(1,Math.round(+dias)||7);
+    if(!isFinite(ini)||!(passo>0)||Math.abs(ini-fim)<1e-9||(abaixo==="direto"&&fim<ini))return[{inicio,conc:fim}];
+    const dir=fim>ini?1:-1,out=[];let c=ini,k=0;
+    while(dir*(fim-c)>1e-9&&k<60){out.push({inicio:addDays(inicio,k*dias),conc:r1(c)});c+=dir*passo;k++}
+    out.push({inicio:addDays(inicio,k*dias),conc:fim});return out}
+  const etapasDe=g=>[...((g&&g.etapas)||[])].filter(x=>x&&x.inicio).sort((a,b)=>a.inicio<b.inicio?-1:a.inicio>b.inicio?1:0);
+  const temAdaptacao=e=>(e.grupos||[]).some(g=>etapasDe(g).length>1);
+  // Dia em que o tratamento chega na dieta final (null se não tem adaptação)
+  const inicioFinal=g=>{const E=etapasDe(g);return E.length>1?E[E.length-1].inicio:null};
+  // Etapa em vigor num dia: {i, n, conc, vol, final, inicio, proxima} (null antes da primeira etapa)
+  function etapaEm(g,dia){const E=etapasDe(g);let i=-1;for(let k=0;k<E.length;k++)if(E[k].inicio<=dia)i=k;if(i<0)return null;
+    return{i,n:E.length,conc:+E[i].conc,vol:r1(100-E[i].conc),final:i===E.length-1,inicio:E[i].inicio,proxima:E[i+1]?E[i+1].inicio:null}}
+  // A partir de quando cada animal entra na análise: com soFinal, só da dieta final do tratamento dele em diante.
+  const corte=(e,a,soFinal)=>soFinal?inicioFinal(grupo(e,a.grupoId)):null;
+
   // Idade em meses a partir da data de nascimento (AAAA-MM-DD).
   function ageMonths(nasc,ref=new Date()){if(!nasc)return NaN;const d=parseDay(nasc);if(!isFinite(d))return NaN;
     return (ref.getFullYear()-d.getFullYear())*12+(ref.getMonth()-d.getMonth())-(ref.getDate()<d.getDate()?1:0)}
@@ -38,14 +62,15 @@ const Data=(function(){
     let sxy=0,sxx=0;for(const p of P){sxy+=(p.x-mx)*(p.y-my);sxx+=(p.x-mx)**2}
     return sxx>0?sxy/sxx:NaN;
   }
-  function performance(e){
+  // soFinal: deixa de fora a fase de adaptação (pesagens e consumo antes da dieta final do tratamento)
+  function performance(e,{soFinal=false}={}){
     const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
-    return e.animais.map(a=>{
-      const pts=pes.filter(p=>isFinite(p.pesos[a.id])).map(p=>({d:p.data,w:+p.pesos[a.id]}));
-      const g=grupo(e,a.grupoId)||{};const o={id:a.id,ident:ident(e,a),brinco:a.brinco,baia:a.baia,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
+    return e.animais.map(a=>{const desde=corte(e,a,soFinal);
+      const pts=pes.filter(p=>isFinite(p.pesos[a.id])&&(!desde||p.data>=desde)).map(p=>({d:p.data,w:+p.pesos[a.id]}));
+      const g=grupo(e,a.grupoId)||{};const o={desde,id:a.id,ident:ident(e,a),brinco:a.brinco,baia:a.baia,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
       if(pts.length){o.p0=pts[0].w;o.pf=pts[pts.length-1].w}
       if(pts.length>=2){o.dias=dayDiff(pts[0].d,pts[pts.length-1].d);o.gmd=o.dias>0?gmdOf(pts,pts[0].d):NaN}
-      const cs=e.consumo.map(c=>+c.valores[a.id]).filter(isFinite);o.cms=cs.length?S.mean(cs):NaN;
+      const cs=e.consumo.filter(c=>!desde||c.data>=desde).map(c=>+c.valores[a.id]).filter(isFinite);o.cms=cs.length?S.mean(cs):NaN;
       o.ca=isFinite(o.cms)&&o.gmd>0?o.cms/o.gmd:NaN;
       o.pv=isFinite(o.cms)&&isFinite(o.p0)?100*o.cms/((o.p0+o.pf)/2):NaN;
       if(isFinite(o.gmd)&&o.meta>0){o.ratio=o.gmd/o.meta;o.status=o.ratio>=1.1?"acima":o.ratio>=.9?"ok":"abaixo"}else o.status="sem";
@@ -63,20 +88,21 @@ const Data=(function(){
     const a=pool.find(a=>hit(norm(ident(e,a))))||pool.find(a=>hit(norm(a.brinco))||hit(norm(a.baia)));return a?a.id:null;
   }
   // min/dia = (marcações do comportamento ÷ horários marcados) × 1440
-  function behaviorVars(e,sessions){
+  function behaviorVars(e,sessions,{soFinal=false}={}){
     const acc={},names={};
     sessions.filter(s=>s.expId===e.id).forEach(s=>{
       s.animais.forEach((_,k)=>{const aid=sessionAnimalId(e,s,k);if(!aid)return;
+        const desde=corte(e,e.animais.find(a=>a.id===aid),soFinal),t0=desde?parseDay(desde).getTime():null;
         const M=s.marks[k]||{};const A=acc[aid]=acc[aid]||{obs:0,c:{}};
-        for(const i in M){const arr=M[i];if(!arr||!arr.length)continue;A.obs++;
+        for(const i in M){const arr=M[i];if(!arr||!arr.length)continue;if(t0&&s.inicio+i*s.intervalo*60000<t0)continue;A.obs++;
           for(const cid of arr){const c=s.comp.find(x=>x.id===cid);if(!c)continue;const key="b:"+norm(c.nome);names[key]=c.nome;A.c[key]=(A.c[key]||0)+1}}
       });});
     const vars=Object.keys(names).map(k=>({key:k,nome:names[k]+" (min/dia)",curto:names[k],comp:true}));
     const by={};for(const aid in acc){by[aid]={};for(const v of vars)by[aid][v.key]=acc[aid].obs?(acc[aid].c[v.key]||0)/acc[aid].obs*1440:NaN;by[aid]._obs=acc[aid].obs}
     return{vars,by};
   }
-  function dataset(e,sessions){
-    const P=performance(e),BV=behaviorVars(e,sessions);
+  function dataset(e,sessions,opt={}){
+    const P=performance(e,opt),BV=behaviorVars(e,sessions,opt);
     const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
     // quem saiu do experimento não entra na estatística
     const rows=P.filter(p=>!p.saida).map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
@@ -137,7 +163,7 @@ const Data=(function(){
     return out;
   }
 
-  return{uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
+  return{iso,addDays,gerarEtapas,etapasDe,temAdaptacao,inicioFinal,etapaEm,uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
     nSlots,slotDate,marked,sessionSignature,toCSV,sessionCSV,parseCSV,sessionsFromCSV};
 })();
 if(typeof module!=="undefined")module.exports=Data;

@@ -74,6 +74,15 @@ const fresh = () => ({ v: 2, active: null, species: [], experiments: [], session
   // experimento antigo sem rótulo é identificado pelo brinco no app: sobe como "Animal", não como "Baia"
   const semRotulo = mkDb(); delete semRotulo.experiments.find(e => e.id === "e1").rotulo;
   assert.strictEqual(Sync.toRows(semRotulo).experiments[0].rotulo, "Animal", "sem rótulo = brinco");
+  // adaptação: config do experimento e etapas do tratamento vão e voltam; quem não tem não manda a coluna
+  assert.ok(!("config" in rows.experiments[0]) && !("etapas" in rows.treatments[0]), "experimento antigo não muda");
+  const comAd = mkDb(), eA = comAd.experiments.find(e => e.id === "e1");
+  eA.config = { adapt: true, ini: 50, passo: 10, dias: 7, analise: "final", volumoso: "Silagem" };
+  eA.grupos[0].etapas = [{ inicio: "2026-09-01", conc: 50 }, { inicio: "2026-09-08", conc: 80 }];
+  const rA = Sync.toRows(comAd), volta = Sync.applyRows(fresh(), JSON.parse(JSON.stringify(rA)));
+  const eV = volta.experiments.find(e => e.id === "e1");
+  assert.deepStrictEqual(eV.config, eA.config); assert.deepStrictEqual(eV.grupos[0].etapas, eA.grupos[0].etapas);
+  assert.strictEqual(Sync.stable(Sync.toRows(volta)), Sync.stable(rA), "ida e volta com adaptação");
 
   // Aparelho A envia tudo; segundo envio não manda nada
   const srv = fakeServer(); const A = mkDb(), shA = {};
