@@ -216,6 +216,7 @@ table.t{border-collapse:collapse;width:100%;font-size:.9rem;font-variant-numeric
 .sp .gl{width:38px;height:38px;border-radius:var(--r-sm);background:var(--night);color:var(--accent);display:grid;place-items:center;font-family:var(--display);font-weight:600;font-size:1.2rem;margin-bottom:auto}
 .sp .name{font-family:var(--display);font-weight:500;font-size:1.4rem;letter-spacing:-.025em;margin-top:14px}
 .sp .meta{font-size:.82rem;color:var(--muted)}
+.sp .sci{font-size:.82rem;font-style:italic;color:var(--ink-2)}
 .now{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:flex;flex-direction:column;gap:14px}
 .clock{font-family:var(--mono);font-weight:500;font-size:3rem;line-height:1;letter-spacing:-.04em}
 .countdown{font-weight:700;font-size:.92rem}
@@ -1699,17 +1700,19 @@ VIEWS.obsHome=function(){
       <div class="sub">${esc(s.especie)} · animais ${esc(s.animais.join(", "))} · ${dmy(new Date(s.inicio))} às ${hhmm(new Date(s.inicio))} · a cada ${s.intervalo} min</div></div>
       <div class="progress" title="${f} de ${tot} marcações"><span style="width:${Math.round(100*f/Math.max(tot,1))}%"></span></div></div>
       <button class="btn sm" data-open="${s.id}">Abrir</button><button class="btn sm quiet danger" data-del="${s.id}">Apagar</button></div>`}).join("")}</div>`:"";
+  const prontos=`<section class="stack" style="margin-top:28px"><div class="spread"><div><h2>Etogramas prontos</h2><p class="note" style="margin-top:4px">Listas de comportamentos de cada espécie (as colunas da planilha). Não são registros: servem de modelo. Toque numa para uma observação rápida, sem experimento.</p></div><button class="btn sm" id="edEto">Editar etogramas</button></div>
+    <div class="species">${db.species.map(s=>`<button class="sp" data-sp="${esc(s.id)}"><span class="gl" aria-hidden="true">${esc(s.nome.charAt(0))}</span><span class="name">${esc(s.nome)}</span>${s.cientifico?`<span class="sci">${esc(s.cientifico)}</span>`:""}<span class="meta">${s.comp.length} comportamentos</span></button>`).join("")}</div></section>`;
   app.innerHTML=pageHead("Observar","Análise comportamental","Escolha o animal, marque o que ele está fazendo a cada intervalo e acompanhe a planilha se formando.")+`
-  ${e?`<section class="card" style="margin-bottom:18px"><div class="card-h"><div><h3>Nova observação em ${esc(e.nome)}</h3><p>${esc(e.especie)} · ${ativos(e).length} animais no experimento</p></div><button class="btn primary" id="newExpObs">${icon("plus")}Começar</button></div></section>`:""}
-  <section class="stack" style="margin-bottom:22px"><h3>Observação avulsa</h3><p class="note" style="margin-top:-6px">Sem vínculo com experimento: escolha o animal.</p>
-    <div class="species">${db.species.map(s=>`<button class="sp" data-sp="${esc(s.id)}"><span class="gl" aria-hidden="true">${esc(s.nome.charAt(0))}</span><span class="name">${esc(s.nome)}</span><span class="meta">${s.comp.length} comportamentos</span></button>`).join("")}</div>
-  </section>
-  <section class="stack">
+  ${e?`<section class="card" style="margin-bottom:18px"><div class="card-h"><div><h3>Nova observação em ${esc(e.nome)}</h3><p>${esc(e.especie)} · ${ativos(e).length} animais no experimento</p></div><button class="btn primary" id="newExpObs">${icon("plus")}Começar</button></div></section>`:needExp()}
+  <section class="stack" style="margin-top:${e?0:22}px">
     <h2>Registros${e?` · ${esc(e.nome)}`:""}</h2>
-    ${list(mine)||`<div class="list"><div class="empty">Nenhuma observação neste experimento ainda.</div></div>`}
-    ${loose.length?`<h3 style="margin-top:10px">Avulsas</h3>${list(loose)}`:""}
-    <p class="note">Os registros ficam salvos neste aparelho. Para juntar o trabalho de vários observadores, cada um exporta a planilha e você importa em Ajustes.</p>
-  </section>`;
+    ${e?(list(mine)||`<div class="list"><div class="empty">Nenhuma observação neste experimento ainda.</div></div>`):""}
+    ${loose.length?`<h3 style="margin-top:10px">Avulsas</h3>${list(loose)}`:(e?"":`<div class="list"><div class="empty">Nenhuma observação ainda.</div></div>`)}
+    <p class="note">${Cloud.user?"As observações vão para o banco e se juntam às da equipe sozinhas. Também dá para baixar a planilha (CSV) de cada uma.":"As observações ficam salvas neste aparelho e vão para o banco quando você entra na conta."}</p>
+  </section>
+  ${prontos}`;
+  if(!e)wireNeedExp();
+  $("#edEto",app).onclick=()=>go({name:"species"});
   if(e)$("#newExpObs",app).onclick=()=>go({name:"setup",sp:e.especieId,exp:true});
   $$("[data-sp]",app).forEach(b=>b.onclick=()=>go({name:"setup",sp:b.dataset.sp,exp:false}));
   $$("[data-open]",app).forEach(b=>b.onclick=()=>go({name:"sheet",id:b.dataset.open,animal:0}));
