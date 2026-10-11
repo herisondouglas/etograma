@@ -373,7 +373,7 @@ VIEWS.expForm=function(){
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
         <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
         ${ed?"":`<label class="f" data-nb>Quantas baias <span class="hint">um animal por baia; dá para adicionar mais depois</span><input type="number" id="xNB" value="12" min="0" max="500" inputmode="numeric"></label>
-        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral (azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12; da 13 em diante você escolhe)</option><option value="alt">Alternando (1ª dieta nas baias 1, 3, 5…)</option><option value="seq">Em sequência (1ª metade na 1ª dieta)</option></select></label>`}
+        <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral</option><option value="alt">Alternando</option><option value="seq">Em sequência</option></select><span class="hint" id="xDivH"></span></label>`}
       </div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
@@ -404,7 +404,7 @@ VIEWS.expForm=function(){
     $("#bSum",app).textContent=G.map(g=>`${g.nome}: ${asg.filter(x=>x===g.id).length}`).join(" · ")+(falta?` · ${falta} sem dieta`:"")}
   function addG(g){const c=document.createElement("div");c.className="card";c.dataset.gid=g.id;
     c.innerHTML=`<div class="fields"><label class="f"><span class="row" style="gap:7px"><i class="dot gdot"></i>Tratamento</span><input type="text" data-k="nome" value="${esc(g.nome)}"></label><label class="f">Cor nos gráficos<select data-k="cor">${CORES.map(k=>`<option value="${k[0]}"${k[0]===g.cor?" selected":""}>${k[2]}</option>`).join("")}</select></label><label class="f">Descrição da dieta<input type="text" data-k="dieta" value="${esc(g.dieta||"")}" placeholder="Ex.: 80% concentrado"></label><label class="f">Meta de GMD <span class="hint">kg/dia esperado</span><input type="number" step="0.01" min="0" inputmode="decimal" data-k="gmdMeta" value="${g.gmdMeta}"></label></div>
-    <div><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
+    <div class="card-foot"><button type="button" class="btn sm quiet danger" data-rm>Remover tratamento</button></div>`;
     $('[data-k="cor"]',c).addEventListener("change",refresh);
     $("[data-rm]",c).onclick=()=>{if(gs.children.length<2)return toast("O experimento precisa de pelo menos um tratamento");
       if(ed&&ed.animais.some(a=>a.grupoId===g.id))return toast("Há animais neste tratamento: mude o tratamento deles na aba Animais antes");
@@ -415,7 +415,9 @@ VIEWS.expForm=function(){
   const rotSel=$("#xRot",app),showNB=()=>$$("[data-nb]",app).forEach(l=>l.hidden=rotSel.value!=="Baia");rotSel.onchange=showNB;showNB();
   if(!ed){fillBaias(1);
     $("#xNB",app).addEventListener("input",()=>fillBaias(asg.length+1)); // novas baias seguem a regra; as já ajustadas ficam
-    $("#xDiv",app).onchange=()=>{asg.length=0;fillBaias(1)};
+    // o nome da opção fica curto (cabe no campo); o detalhe aparece embaixo
+    const divH=()=>{$("#xDivH",app).textContent={curral:"Azul: 1, 4, 5, 8, 10, 11 · vermelho: 2, 3, 6, 7, 9, 12. Da 13 em diante você escolhe.",alt:"1ª dieta nas baias 1, 3, 5…; 2ª nas baias 2, 4, 6…",seq:"1ª metade das baias na 1ª dieta, 2ª metade na 2ª."}[$("#xDiv",app).value]};divH();
+    $("#xDiv",app).onchange=()=>{divH();asg.length=0;fillBaias(1)};
     $("#bGrid",app).addEventListener("click",ev=>{const b=ev.target.closest("[data-b]");if(!b)return;const G=groups(),k=+b.dataset.b,i=G.findIndex(g=>g.id===asg[k]);asg[k]=G[(i+1)%G.length].id;paintGrid()})}
   $("#addG",app).onclick=()=>{const used=groups().map(g=>g.cor);addG({id:uid(),nome:"Dieta "+String.fromCharCode(65+gs.children.length),dieta:"",gmdMeta:1,cor:(CORES.find(k=>!used.includes(k[0]))||CORES[0])[0]});refresh()};
   if(ed){$("#toAn",app).onclick=()=>{db.active=ed.id;go({name:"animals"})};
@@ -488,8 +490,8 @@ VIEWS.animalForm=function(){
   const P=a?performance(e).find(p=>p.id===a.id):null,b=porBaia(e);
   const nPes=a?e.pesagens.filter(p=>isFinite(p.pesos[a.id])).length:0,nObs=a?db.sessions.filter(s=>s.expId===e.id&&(s.animalIds||[]).includes(a.id)).length:0;
   const racas=RACAS[e.especieId]||[];
-  const fBaia=`<label class="f">Baia${b?"":` <span class="hint">opcional</span>`}<input type="text" id="aBaia" value="${esc(a?.baia||"")}" inputmode="numeric" autocomplete="off"${b?" required":""}></label>`;
-  const fBrinco=`<label class="f">Brinco${b?` <span class="hint">opcional</span>`:""}<input type="text" id="aBrinco" value="${esc(a?.brinco||"")}" autocomplete="off"${b?"":" required"}></label>`;
+  const fBaia=`<label class="f"><span>Baia${b?"":` <span class="opt">· opcional</span>`}</span><input type="text" id="aBaia" value="${esc(a?.baia||"")}" inputmode="numeric" autocomplete="off"${b?" required":""}></label>`;
+  const fBrinco=`<label class="f"><span>Brinco${b?` <span class="opt">· opcional</span>`:""}</span><input type="text" id="aBrinco" value="${esc(a?.brinco||"")}" autocomplete="off"${b?"":" required"}></label>`;
   app.innerHTML=pageHead(`${esc(e.nome)} · ${a?"editar animal":"novo animal"}`,a?esc(aName(e,a))+(a.saida?" "+statusPill("saiu"):""):"Cadastrar animal",a?"":"Só a identificação e o tratamento são obrigatórios.",null,"Animais")+`
   <form class="form" id="f">
     ${a?`<div class="grid g4">
@@ -535,7 +537,7 @@ function saidaCard(a){
     <div id="saidaBox" class="stack" hidden><div class="fields">
       <label class="f">Data da saída<input type="date" id="sData" value="${isoDay(new Date())}" max="${isoDay(new Date())}"></label>
       <label class="f">Motivo<select id="sMot">${MOTIVOS.map(m=>`<option>${m}</option>`).join("")}</select></label>
-      <label class="f">Detalhe <span class="hint">opcional</span><input type="text" id="sObs" placeholder="Ex.: timpanismo; laudo do veterinário"></label></div>
+      <label class="f"><span>Detalhe <span class="opt">· opcional</span></span><input type="text" id="sObs" placeholder="Ex.: timpanismo; laudo do veterinário"></label></div>
       <div class="row"><button type="button" class="btn primary" id="okSaida">Confirmar saída</button><button type="button" class="btn quiet" id="cancelSaida">Cancelar</button></div></div></section>`;
 }
 function wireSaida(e,a){
@@ -947,15 +949,15 @@ VIEWS.settings=function(){
   app.innerHTML=pageHead("Ajustes","Dados e configuração")+`
   <div class="grid g2">
     ${cloudCard()}
-    <section class="card"><div class="card-h"><div><h3>Animais e comportamentos</h3><p>Edite o etograma de cada espécie ou crie uma nova.</p></div></div><div><button class="btn" id="spc">Editar etogramas</button></div></section>
+    <section class="card"><div class="card-h"><div><h3>Animais e comportamentos</h3><p>Edite o etograma de cada espécie ou crie uma nova.</p></div></div><div class="card-act"><button class="btn" id="spc">Editar etogramas</button></div></section>
     <section class="card"><div class="card-h"><div><h3>Juntar planilhas dos observadores</h3><p>Cada observador exporta a planilha no celular dele; aqui você importa todas no experimento ativo${exp()?` (<b>${esc(exp().nome)}</b>)`:""}.</p></div></div>
-      <label class="btn" for="csvIn" style="align-self:flex-start">${icon("up")}Importar planilhas (.csv)</label><input type="file" id="csvIn" accept=".csv,text/csv" multiple hidden><p class="note" id="csvMsg"></p></section>
+      <label class="btn card-act" for="csvIn" style="align-self:flex-start">${icon("up")}Importar planilhas (.csv)</label><input type="file" id="csvIn" accept=".csv,text/csv" multiple hidden><p class="note" id="csvMsg"></p></section>
     <section class="card"><div class="card-h"><div><h3>Cópia de segurança</h3><p>Salve tudo num arquivo e restaure em outro aparelho.</p></div></div>
-      <div class="row"><button class="btn" id="bk">${icon("down")}Salvar cópia</button><label class="btn" for="bkIn">${icon("up")}Restaurar cópia</label><input type="file" id="bkIn" accept=".json,application/json" hidden></div><p class="note" id="bkMsg"></p></section>
+      <div class="row card-act"><button class="btn" id="bk">${icon("down")}Salvar cópia</button><label class="btn" for="bkIn">${icon("up")}Restaurar cópia</label><input type="file" id="bkIn" accept=".json,application/json" hidden></div><p class="note" id="bkMsg"></p></section>
     ${badCopy()?`<section class="card"><div class="card-h"><div><h3>Dados antigos não lidos</h3><p>Ao abrir, o app encontrou dados salvos que não conseguiu ler (arquivo corrompido ou de outra versão). Eles foram guardados sem alteração. Baixe o arquivo e envie para quem cuida do app.</p></div></div>
       <div class="row"><button class="btn" id="badDl">${icon("down")}Baixar dados não lidos</button><button class="btn quiet danger" id="badRm">Descartar</button></div></section>`:""}
     <section class="card"><div class="card-h"><div><h3>Limpar</h3><p>Apaga dados deste aparelho.${Cloud.user?" Não apaga nada do banco: o que está lá volta na próxima sincronização.":""}</p></div></div>
-      <div class="row">${hasEx?`<button class="btn" id="rmEx">Apagar dados de exemplo</button>`:`<button class="btn" id="addEx">Carregar exemplo</button>`}<button class="btn quiet danger" id="wipe">Apagar tudo</button></div></section>
+      <div class="row card-act">${hasEx?`<button class="btn" id="rmEx">Apagar dados de exemplo</button>`:`<button class="btn" id="addEx">Carregar exemplo</button>`}<button class="btn quiet danger" id="wipe">Apagar tudo</button></div></section>
   </div>
   <p class="note" style="margin-top:22px">Etograma · protótipo. ${Cloud.user?"Os dados ficam neste aparelho e no banco de dados (Supabase).":"Os dados ficam salvos só neste aparelho e navegador."}</p>`;
   wireCloudCard();
@@ -1138,7 +1140,7 @@ function authBody(){
     <div class="stack">${cloudCfg()?`<button class="btn primary auth-go" id="lRetry" type="button"><span class="lbl">Tentar de novo</span><span class="spin"></span></button>`:""}<button class="linkbtn" id="lSkip" type="button">Continuar sem conta →</button></div>`;
   const up=Cloud.mode==="up";
   return`<div class="auth-tabs" role="tablist" aria-label="Entrar ou criar conta" data-mode="${up?"up":"in"}"><span class="pill-bg"></span><button type="button" role="tab" aria-selected="${!up}" data-m="in">Entrar</button><button type="button" role="tab" aria-selected="${up}" data-m="up">Criar conta</button></div>
-    <div class="auth-swap"><h2>${up?"Criar sua conta":"Bem-vindo de volta"}</h2><p class="muted">${up?"Cada observador usa a própria conta. Depois você entra no experimento com o código que o responsável passar.":"Entre para juntar as suas marcações com as da equipe."}</p>
+    <div class="auth-swap"><h2>${up?"Criar sua conta":"Bem-vindo de volta"}</h2><p class="muted">${up?"Cada observador usa a própria conta e entra no experimento com o código do responsável.":"Entre para juntar as suas marcações com as da equipe."}</p>
     <form id="lf" class="stack" novalidate>
       ${up?authField("lNome","text","Seu nome","name"):""}${authField("lMail","email","E-mail","email")}${authField("lPass","password",up?"Senha (mínimo 6)":"Senha",up?"new-password":"current-password",true)}
       <button class="btn primary auth-go" type="submit"><span class="lbl">${up?"Criar conta":"Entrar"}</span><span class="spin"></span><svg class="i arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
@@ -1149,7 +1151,11 @@ function authBody(){
 VIEWS.login=function(){
   if(Cloud.user&&!Cloud.recovery)return go({name:"dash"});
   const seen=Cloud.authSeen;Cloud.authSeen=true; // a animação de entrada só na primeira vez
-  app.innerHTML=`<div class="auth-wrap${seen?" seen":""}">
+  app.innerHTML=`<div class="lp">
+  <nav class="lp-nav" id="lpNav" aria-label="Seções"><a class="brand" href="#" data-lp="top"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</a>
+    <span class="lp-links"><a href="#lpHist" data-lp="lpHist">História</a><a href="#lpComo" data-lp="lpComo">Como funciona</a><a href="#lpTech" data-lp="lpTech">Linguagens</a></span>
+    <button class="btn primary sm" type="button" data-lp="entrar">Entrar</button></nav>
+  <div class="lp-hero" id="lpHero"><div class="auth-wrap${seen?" seen":""}">
     <section class="auth-art" id="authArt" aria-hidden="true">
       <div class="auth-glow"></div>
       <div class="auth-top fx" style="--i:0"><div class="brand"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</div>
@@ -1162,8 +1168,10 @@ VIEWS.login=function(){
       <div class="auth-facts fx" style="--i:5"><div><b class="num">12</b><span>baias</span></div><div><b class="num">288</b><span>marcações / 24 h</span></div><div><b>Offline</b><span>primeiro</span></div></div>
     </section>
     <section class="auth-panel"><div class="auth-card fx" style="--i:2" id="authCard">${authBody()}</div>
-      <p class="auth-foot fx" style="--i:4">Sem conta, tudo fica salvo só neste aparelho.</p></section>
-  </div>`;
+      <p class="auth-foot fx" style="--i:4">Sem conta, tudo fica salvo só neste aparelho.</p>
+      <a class="lp-more fx" style="--i:5" href="#lpHist" data-lp="lpHist">Conheça o projeto<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></a></section>
+  </div></div>
+  <div class="lp-body">${lpBody()}</div></div>`;
   // relógio: hora atual e quanto falta para a próxima marcação de 5 min
   const clock=()=>{const n=new Date(),c=$("#aClock",app);if(!c)return;c.textContent=hhmm(n)+":"+pad(n.getSeconds());
     const left=300-((n.getMinutes()%5)*60+n.getSeconds());$("#aNext",app).textContent=`próxima marcação em ${Math.floor(left/60)}:${pad(left%60)}`};
@@ -1181,8 +1189,86 @@ VIEWS.login=function(){
   // brilho que segue o cursor (só onde há mouse)
   const art=$("#authArt",app);
   if(matchMedia("(hover: hover)").matches)art.addEventListener("pointermove",ev=>{const b=art.getBoundingClientRect();art.style.setProperty("--mx",(ev.clientX-b.left)+"px");art.style.setProperty("--my",(ev.clientY-b.top)+"px")});
-  wireAuth();
+  wireAuth();wireLanding();
 };
+
+/* ---------- apresentação abaixo do login: história, como funciona, linguagens ---------- */
+const LP_FRASE="Num confinamento com 12 vacas, 6 pessoas se revezam por 24 horas marcando um X a cada 5 minutos. Tudo no papel, depois digitado folha por folha.";
+const LP_LANG=[["JavaScript",78,"var(--accent)","Telas, gráficos desenhados à mão em SVG, estatística (ANOVA, Pearson, Bonferroni) e a sincronização com o banco."],
+  ["CSS",15,"var(--s1)","O design inteiro em variáveis: tema claro e escuro, tipografia, animações como esta."],
+  ["SQL",7,"var(--s3)","PostgreSQL no Supabase: tabelas, regras de acesso por linha, convite por código e visões prontas para o R e o SAS."],
+  ["HTML",.5,"var(--s4)","Uma página só. O app inteiro também sai num único arquivo."]];
+function lpBody(){
+  const kpi=(n,l)=>`<div class="lp-kpi"><b class="num" data-count="${n}">0</b><span>${l}</span></div>`;
+  const step=(i,t,p,vis)=>`<article class="lp-step" style="--k:${i}"><div class="lp-step-t"><span class="lp-n num">0${i+1}</span><h3>${t}</h3><p>${p}</p></div><div class="lp-vis" aria-hidden="true">${vis}</div></article>`;
+  const btns=["Ruminando","Comendo","Bebendo","Deitado","Em pé","Ócio"].map((b,i)=>`<span class="${i===0?"on":""}">${b}</span>`).join("");
+  const bars=ORDEM_CURRAL.split("").map((c,i)=>{const h=[62,78,84,55,70,90,74,66,95,48,72,81][i];return`<i class="${c==="A"?"a":"v"}" style="--h:${h}%;--d:${i*45}ms"></i>`}).join("");
+  const pts=[[8,70],[16,64],[22,58],[30,61],[38,48],[46,44],[54,40],[60,33],[70,30],[78,22],[86,20],[94,12]];
+  return`<section class="lp-sec" id="lpHist"><span class="eyebrow rv">01 · A história</span>
+    <p class="lp-frase" id="lpFrase">${LP_FRASE.split(" ").map(w=>`<span>${w}</span>`).join(" ")}</p>
+    <div class="lp-kpis rv">${kpi(12,"animais no curral")}${kpi(6,"observadores")}${kpi(288,"marcações por animal / dia")}${kpi(3456,"X num experimento")}</div>
+    <ol class="lp-time" id="lpTime"><span class="lp-time-bar"></span>
+      <li class="rv"><span class="eyebrow">Antes</span><h3>Papel e prancheta</h3><p>Uma folha por animal, horários × comportamentos. No fim, alguém digita tudo para o programa de estatística.</p></li>
+      <li class="rv"><span class="eyebrow">A virada</span><h3>Botões grandes no celular</h3><p>O horário atual aparece sozinho, o celular vibra quando vira e a tela não apaga. Dá para usar com uma mão no curral.</p></li>
+      <li class="rv"><span class="eyebrow">Agora</span><h3>A equipe inteira junta</h3><p>Cada observador marca no seu aparelho, mesmo sem sinal. Tudo chega ao mesmo banco, pronto para o R ou o SAS.</p></li></ol></section>
+  <section class="lp-sec" id="lpComo"><span class="eyebrow rv">02 · Como funciona</span><h2 class="lp-h rv">Do curral à estatística<br>em quatro passos.</h2>
+    <div class="lp-steps">
+      ${step(0,"Observar","Escolha os animais, o intervalo e a duração. A tela mostra o horário de agora com botões grandes: um toque marca o que o animal está fazendo.",`<div class="v-obs"><div class="v-obs-h"><b class="num">14:35</b><span>Baia 7 · próxima em <b class="num">3:12</b></span></div><div class="v-btns">${btns}</div></div>`)}
+      ${step(1,"Desempenho","Pesagens e consumo viram GMD, consumo de matéria seca e conversão alimentar. Cada animal é comparado com a meta da dieta: acima, no esperado ou abaixo.",`<div class="v-bars"><div class="v-meta"><span>meta GMD</span></div>${bars}</div><div class="v-leg"><span><b style="background:var(--s1)"></b>Dieta 40%</span><span><b style="background:var(--s5)"></b>Dieta 80%</span></div>`)}
+      ${step(2,"Estatística","ANOVA, comparação par a par e correlação entre ruminação, consumo e ganho de peso. O resultado vem explicado em português simples e sai em CSV.",`<svg class="v-sc" viewBox="0 0 100 80"><path class="v-grid" d="M0 20H100M0 40H100M0 60H100"/><path class="v-line" pathLength="1" d="M4 72L98 10"/>${pts.map(([x,y],i)=>`<circle cx="${x}" cy="${y}" r="2.4" style="--d:${i*50}ms"/>`).join("")}</svg><div class="v-r"><span class="num">r = 0,94</span><span class="num">p &lt; 0,001</span></div>`)}
+      ${step(3,"Equipe","Quem cria o experimento recebe um código. Os observadores entram com ele e as marcações se juntam sozinhas quando a internet volta.",`<div class="v-code">${"7A3B9C".split("").map(c=>`<span class="num">${c}</span>`).join("")}</div><div class="v-team">${["RA","JP","LM"].map((n,i)=>`<span style="--d:${i*180}ms"><i>${n}</i><small>sincronizado</small></span>`).join("")}</div>`)}
+    </div></section>
+  <section class="lp-sec" id="lpTech"><span class="eyebrow rv">03 · Do que é feito</span><h2 class="lp-h rv">Leve de propósito:<br>sem framework, sem instalação.</h2>
+    <div class="lp-lang rv" role="img" aria-label="${LP_LANG.map(l=>l[0]+" "+(l[1]<1?"menos de 1":l[1])+"%").join(", ")}">${LP_LANG.map(l=>`<i style="--w:${l[1]}%;background:${l[2]}"></i>`).join("")}</div>
+    <div class="lp-langs">${LP_LANG.map(l=>`<div class="lp-l rv"><span class="lp-dot" style="background:${l[2]}"></span><div><h3>${l[0]} <small class="num">${l[1]<1?"&lt;1":l[1]}%</small></h3><p>${l[3]}</p></div></div>`).join("")}</div>
+    <p class="lp-stack rv">${["Node.js (testes e build)","Supabase","GitHub Pages","Claude (IA)","CSV para R / SAS"].map(s=>`<span>${s}</span>`).join("")}</p></section>
+  <section class="lp-cta"><h2>Pronto para a<br>próxima <em>marcação</em>?</h2><div class="row"><button class="btn primary" type="button" data-lp="entrar">Entrar ou criar conta</button><button class="btn lp-ghost" type="button" data-lp="skip">Continuar sem conta</button></div>
+    <p>Etograma · comportamento animal · Zootecnia</p></section>`;
+}
+function wireLanding(){
+  const page=$(".lp",app);if(!page)return;
+  const nav=$("#lpNav",app),hero=$("#lpHero",app),wrap=$(".auth-wrap",hero),steps=$$(".lp-step",app),words=$$("#lpFrase span",app),time=$("#lpTime",app);
+  const still=reduceMotion(),clamp=x=>Math.max(0,Math.min(1,x));
+  // navegação: links rolam até a seção; "Entrar" leva ao formulário
+  $$("[data-lp]",app).forEach(a=>a.onclick=ev=>{ev.preventDefault();const k=a.dataset.lp,smooth=still?"auto":"smooth";
+    if(k==="skip"){try{localStorage.setItem(SEMCONTA,"1")}catch(e){}return go({name:"dash"})}
+    if(k==="top")return window.scrollTo({top:0,behavior:smooth});
+    if(k==="entrar"){
+      // o cartão está dentro do topo que gruda: scrollIntoView leria a posição grudada e subiria só um pouco a cada toque.
+      // Por isso a posição é calculada no fluxo normal da página (offsetTop ignora sticky e transform).
+      const c=$("#authCard",app);let top=0;for(let el=c;el&&el!==hero;el=el.offsetParent)top+=el.offsetTop;
+      const vh=innerHeight,alvo=Math.max(0,Math.min(Math.max(0,hero.offsetHeight-vh),top+c.offsetHeight/2-vh/2));
+      const foca=()=>($("#lMail",app)||$("#lPass",app))?.focus({preventScroll:true});
+      if(still||Math.abs(scrollY-alvo)<2){window.scrollTo(0,alvo);return foca()}
+      let feito=false;const fim=()=>{if(feito)return;feito=true;removeEventListener("scrollend",fim);foca()};
+      addEventListener("scrollend",fim);setTimeout(fim,1200);window.scrollTo({top:alvo,behavior:"smooth"});return}
+    $("#"+k,app)?.scrollIntoView({behavior:smooth,block:"start"})});
+  // rolagem: o topo se compacta num cartão, o menu vira pílula, os passos se empilham
+  const body=$(".lp-body",app);let mx=-999,my=-999;
+  const glow=()=>{const b=body.getBoundingClientRect();body.style.setProperty("--mx",(mx-b.left)+"px");body.style.setProperty("--my",(my-b.top)+"px")};
+  if(matchMedia("(hover: hover)").matches)body.addEventListener("pointermove",ev=>{mx=ev.clientX;my=ev.clientY;glow()});
+  let raf=0;
+  const frame=()=>{raf=0;if(mx>-999)glow();const vh=innerHeight,y=scrollY,hh=hero.offsetHeight,start=Math.max(0,hh-vh);
+    hero.style.setProperty("--stick",Math.min(0,vh-hh)+"px");
+    const p=still?0:clamp((y-start)/(vh*.85));page.style.setProperty("--p",p.toFixed(3));
+    nav.classList.toggle("show",y>start+vh*.25);nav.classList.toggle("compact",y>start+vh*.6);
+    const r=$("#lpFrase",app).getBoundingClientRect(),fr=still?1:clamp((vh*.85-r.top)/(r.height+vh*.3)),lit=Math.round(fr*words.length);
+    words.forEach((w,i)=>w.classList.toggle("on",i<lit));
+    const t=time.getBoundingClientRect();time.style.setProperty("--t",still?1:clamp((vh*.7-t.top)/t.height).toFixed(3));
+    // cada passo encolhe um pouco quando o seguinte chega por cima
+    const q=steps.map((s,i)=>{if(!i||still)return 0;const top=parseFloat(getComputedStyle(s).top)||0,b=s.getBoundingClientRect();return clamp(1-(b.top-top)/(b.height*.9))});
+    steps.forEach((s,i)=>{let d=0;for(let j=i+1;j<q.length;j++)d+=q[j];s.style.setProperty("--q",Math.min(d,2.5).toFixed(3))})};
+  const onScroll=()=>{if(!raf)raf=requestAnimationFrame(frame)};
+  addEventListener("scroll",onScroll,{passive:true});addEventListener("resize",onScroll);frame();
+  // o topo muda de altura ao trocar Entrar/Criar conta ou ao aparecer uma mensagem: recalcula onde ele gruda
+  const ro=window.ResizeObserver?new ResizeObserver(onScroll):null;if(ro)ro.observe(hero);
+  // entra com fade quando aparece na tela; números contam até o valor
+  const count=el=>{let t0=0;const n=+el.dataset.count,fmt=v=>Math.round(v).toLocaleString("pt-BR");if(still){el.textContent=fmt(n);return}
+    const f=t=>{t0=t0||t;const k=clamp((t-t0)/1300);el.textContent=fmt(n*(1-Math.pow(1-k,3)));if(k<1&&el.isConnected)requestAnimationFrame(f)};requestAnimationFrame(f)};
+  const io=new IntersectionObserver(es=>es.forEach(e=>{if(!e.isIntersecting)return;e.target.classList.add("in");$$("[data-count]",e.target).forEach(count);io.unobserve(e.target)}),{threshold:.2});
+  $$(".rv,.lp-step,.lp-cta",app).forEach(el=>io.observe(el));
+  cleanup.push(()=>{if(ro)ro.disconnect();removeEventListener("scroll",onScroll);removeEventListener("resize",onScroll);io.disconnect();cancelAnimationFrame(raf)});
+}
 function wireAuth(){
   const card=$("#authCard",app);if(!card)return;
   const msg=(t,kind)=>{const m=$("#lMsg",app);if(m){m.textContent=t;m.className="auth-msg"+(kind?" "+kind:"")}};
