@@ -181,7 +181,7 @@ label.f .hint:empty{display:none}
 .card > .note:empty{display:none} /* mensagem vazia não ocupa espaço (botões alinhados) */
 .card-foot{display:flex;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
 .card-foot .btn.quiet{margin-right:-10px} /* o texto do botão encosta na borda direita dos campos */
-input[type=text],input[type=search],input[type=number],input[type=date],input[type=time],select,textarea{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;min-height:44px;width:100%;color:var(--ink)}
+input[type=text],input[type=email],input[type=url],input[type=password],input[type=search],input[type=number],input[type=date],input[type=time],select,textarea{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;min-height:44px;width:100%;color:var(--ink)}
 input:focus,select:focus,textarea:focus{border-color:var(--ink);outline:none;box-shadow:0 0 0 3px var(--accent-2)}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .check{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:7px 14px 7px 10px;font-weight:600;font-size:.9rem;cursor:pointer;background:var(--surface)}
@@ -554,3 +554,9 @@ body.auth main{padding:0;max-width:none}
   .rv,.lp-cta{opacity:1;transform:none;transition:none}.lp-step{transform:none}.lp-step::after{display:none}.lp-frase span{color:var(--ink)}
   .v-bars i,.v-sc circle,.v-team span{transform:none;opacity:1;transition:none}.v-sc .v-line{stroke-dashoffset:0;transition:none}
   .lp-lang i{width:var(--w);min-width:6px;transition:none}.lp-more svg,.lp-cta::after,.lp-step.in .v-btns span.on,.lp-step.in .v-code span{animation:none}}
+
+/* acesso restrito */
+.auth-lock{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-left:auto}
+.auth-lock svg{width:14px;height:14px}
+.ac-act{width:96px;display:flex;justify-content:flex-end} /* coluna fixa: as etiquetas de papel ficam alinhadas */
+.ac-act{min-height:36px;align-items:center}

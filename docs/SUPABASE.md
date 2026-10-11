@@ -17,6 +17,23 @@ no mesmo experimento vê as mudanças dos outros quase na hora.
 2. Abra o arquivo [`supabase/schema.sql`](../supabase/schema.sql) deste projeto, copie **tudo**, cole e clique em **Run**.
 3. Deve aparecer "Success". Pode rodar de novo no futuro (quando o app ganhar tabelas novas) sem perder dados.
 
+## 2b. Lista de acessos (quem pode usar o app)
+
+O app só funciona com login, e **só cria conta quem está na lista de acessos**. O banco recusa qualquer
+outro e-mail, mesmo que a pessoa tente por fora do app. Retirar alguém da lista corta o acesso aos dados na hora.
+
+- Na primeira vez que o `schema.sql` roda, quem **já tinha conta** entra na lista como membro (ninguém fica trancado).
+- O **primeiro administrador** é definido uma vez, no SQL Editor (troque pelo seu e-mail):
+
+  ```sql
+  insert into public.acessos(email, papel) values (seu-email@exemplo.com, admin)
+  on conflict (email) do update set papel = admin;
+  ```
+
+- Depois disso, o administrador gerencia tudo pelo app: **Ajustes → Acessos** → digita o e-mail →
+  **Liberar acesso**. Para tirar, toque em **Retirar** duas vezes. Ninguém retira a si mesmo, para a lista nunca ficar sem administrador.
+- Para liberar alguém: inclua o e-mail na lista **antes** de a pessoa criar a conta.
+
 ## 3. Ajustar o login
 
 Em **Authentication → URL Configuration**:
@@ -48,7 +65,8 @@ cada pessoa só vê os experimentos de que participa.
 
 ## 5. Usar
 
-1. **Responsável** (ex.: Raquel): em Ajustes → **Criar conta** → entra. Os experimentos que já estavam
+0. O administrador libera o e-mail de cada pessoa em **Ajustes → Acessos**.
+1. **Responsável** (ex.: Raquel): na tela de entrar → **Criar conta** → entra. Os experimentos que já estavam
    no celular sobem para o banco (os dados de exemplo **não** sobem). No **Início** aparece o
    **código do experimento** (6 letras/números). Toque nele para copiar.
 2. **Observadores**: cada um cria a própria conta no celular dele e vai em

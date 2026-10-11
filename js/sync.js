@@ -18,7 +18,7 @@ const Sync=(function(){
     const out=Object.fromEntries(TABLES.map(t=>[t,[]]));
     const exps=db.experiments.filter(e=>!e.exemplo),ids=new Set(exps.map(e=>e.id));
     for(const e of exps){
-      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Animal"?"Animal":"Baia"});
+      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Baia"?"Baia":"Animal"}); // igual ao app: sem rótulo = identificado pelo brinco
       (e.grupos||[]).forEach((g,i)=>out.treatments.push({id:g.id,experiment_id:e.id,nome:g.nome||"Tratamento",dieta:nn(g.dieta),gmd_meta:g.gmdMeta!==""&&g.gmdMeta!=null&&isFinite(+g.gmdMeta)?+g.gmdMeta:null,cor:nn(g.cor),ordem:i}));
       for(const a of e.animais||[])out.animals.push({id:a.id,experiment_id:e.id,treatment_id:nn(a.grupoId),baia:nn(a.baia),brinco:nn(a.brinco),raca:nn(a.raca),sexo:nn(a.sexo),nascimento:nn(a.nascimento),obs:nn(a.obs),saida:a.saida||null});
       for(const p of e.pesagens||[])out.weighings.push({id:p.id,experiment_id:e.id,data:p.data,pesos:p.pesos||{}});

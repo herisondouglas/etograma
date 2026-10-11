@@ -32,7 +32,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
    de comportamentos do etograma, recebe JSON, o usuário revisa e aplica na planilha da observação.
 5. (Não feito) Coleira com acelerômetro/ESP32 medindo ruminação. Precisa de hardware.
 
-**Entrar** (`VIEWS.login`, tela cheia sem menu: painel escuro com "etograma vivo" animado + relógio da próxima marcação; formulário Entrar/Criar conta/Esqueci a senha/nova senha; abre sozinha ao iniciar sem conta, "Continuar sem conta" é lembrado em `etograma.semconta`; respeita movimento reduzido; abaixo do formulário, apresentação com rolagem que compacta o topo num cartão e vira o menu numa pílula: História, Como funciona com cartões empilhados, Linguagens e chamada final, `lpBody()`/`wireLanding()`), Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nascimento, observações; cadastro rápido por faixa; exportar lista), **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
+**Entrar** (`VIEWS.login`, tela cheia sem menu: painel escuro com "etograma vivo" animado + relógio da próxima marcação; formulário Entrar/Criar conta/Esqueci a senha/nova senha; **login obrigatório** quando há banco configurado (`precisaEntrar()` em `render()`; exceção: aparelho onde alguém já entrou e está sem internet); não existe mais "Continuar sem conta"; respeita movimento reduzido; abaixo do formulário, apresentação com rolagem que compacta o topo num cartão e vira o menu numa pílula: História, Como funciona com cartões empilhados, Linguagens e chamada final, `lpBody()`/`wireLanding()`), Além disso: **Animais** (cadastro: baia, brinco, tratamento, raça, sexo, nascimento, observações; cadastro rápido por faixa; exportar lista), **Início** (painel do experimento, alertas, gráfico "Orçamento de tempo 24 h") e **Ajustes**
 (editar etogramas, juntar CSVs dos observadores, backup JSON, apagar exemplo).
 
 ## Arquitetura atual
@@ -59,6 +59,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
 - Exclusão = `deleted = true` (chega aos outros aparelhos). Apagar experimento só envia o experimento (filhos não). Só o responsável apaga (gatilho no banco).
 - Tempo real (postgres_changes) + reserva a cada 60 s + ao voltar a internet/aba.
 - Exemplo (`exemplo: true`) e etogramas das espécies **não** sobem.
+- **Acesso restrito (lista `acessos`)**: só e-mails da lista criam conta (gatilho `check_acesso` em `auth.users`) e as regras de acesso exigem `private.tem_acesso()`, então tirar da lista corta o acesso na hora. Admin gerencia em Ajustes → Acessos (`acessosCard`/`wireAcessos`); `checkAcesso()` desconecta com aviso quem saiu da lista. Primeiro admin: insert manual (docs/SUPABASE.md, 2b).
 - Login e-mail/senha; quem cria vira `responsavel`; observadores entram com `join_experiment(código)`. Código aparece no Início e em Editar experimento.
 - Sair da conta: bloqueado se houver pendências; depois remove do aparelho o que veio do banco (`Sync.forget`). Outra conta no mesmo aparelho também limpa.
 - Restaurar cópia / Apagar tudo com login: zera a sombra (vira mesclagem; nada é apagado no banco).

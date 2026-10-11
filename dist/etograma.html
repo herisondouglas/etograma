@@ -191,7 +191,7 @@ label.f .hint:empty{display:none}
 .card > .note:empty{display:none} /* mensagem vazia não ocupa espaço (botões alinhados) */
 .card-foot{display:flex;justify-content:flex-end;border-top:1px solid var(--line);padding-top:12px;margin-top:2px}
 .card-foot .btn.quiet{margin-right:-10px} /* o texto do botão encosta na borda direita dos campos */
-input[type=text],input[type=search],input[type=number],input[type=date],input[type=time],select,textarea{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;min-height:44px;width:100%;color:var(--ink)}
+input[type=text],input[type=email],input[type=url],input[type=password],input[type=search],input[type=number],input[type=date],input[type=time],select,textarea{border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r-sm);padding:10px 12px;min-height:44px;width:100%;color:var(--ink)}
 input:focus,select:focus,textarea:focus{border-color:var(--ink);outline:none;box-shadow:0 0 0 3px var(--accent-2)}
 .checks{display:flex;flex-wrap:wrap;gap:8px}
 .check{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-2);border-radius:var(--r-sm);padding:7px 14px 7px 10px;font-weight:600;font-size:.9rem;cursor:pointer;background:var(--surface)}
@@ -565,6 +565,12 @@ body.auth main{padding:0;max-width:none}
   .v-bars i,.v-sc circle,.v-team span{transform:none;opacity:1;transition:none}.v-sc .v-line{stroke-dashoffset:0;transition:none}
   .lp-lang i{width:var(--w);min-width:6px;transition:none}.lp-more svg,.lp-cta::after,.lp-step.in .v-btns span.on,.lp-step.in .v-code span{animation:none}}
 
+/* acesso restrito */
+.auth-lock{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-left:auto}
+.auth-lock svg{width:14px;height:14px}
+.ac-act{width:96px;display:flex;justify-content:flex-end} /* coluna fixa: as etiquetas de papel ficam alinhadas */
+.ac-act{min-height:36px;align-items:center}
+
 </style>
 <style>:root{color-scheme:light}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 </head>
@@ -790,7 +796,7 @@ const Sync=(function(){
     const out=Object.fromEntries(TABLES.map(t=>[t,[]]));
     const exps=db.experiments.filter(e=>!e.exemplo),ids=new Set(exps.map(e=>e.id));
     for(const e of exps){
-      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Animal"?"Animal":"Baia"});
+      out.experiments.push({id:e.id,nome:e.nome||"Experimento",especie_id:nn(e.especieId),especie:nn(e.especie),responsavel:nn(e.responsavel),inicio:nn(e.inicio),rotulo:e.rotulo==="Baia"?"Baia":"Animal"}); // igual ao app: sem rótulo = identificado pelo brinco
       (e.grupos||[]).forEach((g,i)=>out.treatments.push({id:g.id,experiment_id:e.id,nome:g.nome||"Tratamento",dieta:nn(g.dieta),gmd_meta:g.gmdMeta!==""&&g.gmdMeta!=null&&isFinite(+g.gmdMeta)?+g.gmdMeta:null,cor:nn(g.cor),ordem:i}));
       for(const a of e.animais||[])out.animals.push({id:a.id,experiment_id:e.id,treatment_id:nn(a.grupoId),baia:nn(a.baia),brinco:nn(a.brinco),raca:nn(a.raca),sexo:nn(a.sexo),nascimento:nn(a.nascimento),obs:nn(a.obs),saida:a.saida||null});
       for(const p of e.pesagens||[])out.weighings.push({id:p.id,experiment_id:e.id,data:p.data,pesos:p.pesos||{}});
@@ -948,6 +954,7 @@ const IC={
   perf:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
   stats:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
   eye:'<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
   gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
   back:'<path d="M15 18l-6-6 6-6"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
@@ -1211,6 +1218,7 @@ function render(){
   clearInterval(tick);tick=null;cleanup.forEach(f=>{try{f()}catch(e){}});cleanup=[];
   if(view.name!=="sheet"&&wake){try{wake.release()}catch(e){}wake=null}
   renderChrome();
+  if(view.name!=="login"&&precisaEntrar())view={name:"login"};
   document.body.classList.toggle("auth",view.name==="login");
   (VIEWS[view.name]||VIEWS.dash)();
 }
@@ -1879,6 +1887,7 @@ VIEWS.settings=function(){
   app.innerHTML=pageHead("Ajustes","Dados e configuração")+`
   <div class="grid g2">
     ${cloudCard()}
+    ${Cloud.papel==="admin"?acessosCard():""}
     <section class="card"><div class="card-h"><div><h3>Animais e comportamentos</h3><p>Edite o etograma de cada espécie ou crie uma nova.</p></div></div><div class="card-act"><button class="btn" id="spc">Editar etogramas</button></div></section>
     <section class="card"><div class="card-h"><div><h3>Juntar planilhas dos observadores</h3><p>Cada observador exporta a planilha no celular dele; aqui você importa todas no experimento ativo${exp()?` (<b>${esc(exp().nome)}</b>)`:""}.</p></div></div>
       <label class="btn card-act" for="csvIn" style="align-self:flex-start">${icon("up")}Importar planilhas (.csv)</label><input type="file" id="csvIn" accept=".csv,text/csv" multiple hidden><p class="note" id="csvMsg"></p></section>
@@ -1890,7 +1899,7 @@ VIEWS.settings=function(){
       <div class="row card-act">${hasEx?`<button class="btn" id="rmEx">Apagar dados de exemplo</button>`:`<button class="btn" id="addEx">Carregar exemplo</button>`}<button class="btn quiet danger" id="wipe">Apagar tudo</button></div></section>
   </div>
   <p class="note" style="margin-top:22px">Etograma · protótipo. ${Cloud.user?"Os dados ficam neste aparelho e no banco de dados (Supabase).":"Os dados ficam salvos só neste aparelho e navegador."}</p>`;
-  wireCloudCard();
+  wireCloudCard();wireAcessos();
   $("#spc",app).onclick=()=>go({name:"species"});
   $("#bk",app).onclick=()=>saveFile(`etograma-copia-${isoDay(new Date())}.json`,JSON.stringify(db),"application/json");
   $("#bkIn",app).onchange=async ev=>{const f=ev.target.files[0],msg=$("#bkMsg",app);ev.target.value="";if(!f)return;let d;
@@ -1939,31 +1948,48 @@ function ptErr(e){const m=String(e&&(e.message||e)||"");
     [/already registered|already been registered/i,"Já existe uma conta com esse e-mail. Use Entrar."],[/password should be at least/i,"A senha precisa ter pelo menos 6 caracteres."],
     [/for security purposes|rate limit|too many/i,"Muitas tentativas seguidas. Espere um minuto e tente de novo."],[/unable to validate email|invalid email/i,"E-mail inválido."],
     [/fetch|network|load failed/i,"Sem internet. Tente de novo quando tiver sinal."],[/código não encontrado/i,"Código não encontrado. Confira com o responsável."],
-    [/row-level security|permission denied/i,"Sem permissão para essa alteração."]];
+    [/row-level security|permission denied/i,"Sem permissão para essa alteração."],
+    [/EMAIL_SEM_ACESSO|database error saving new user/i,"Este e-mail não tem acesso ao Etograma. Peça ao administrador para incluir você na lista."]];
   for(const[r,t]of map)if(r.test(m))return t;return m||"Algo deu errado."}
 
+// Login obrigatório quando o app está ligado ao banco. Exceção: aparelho em que alguém já entrou
+// e que está sem internet (o curral) continua funcionando com o que está salvo nele.
+function precisaEntrar(){
+  if(!cloudCfg()||Cloud.user)return false;
+  if(syncState.user&&(Cloud.status==="loading"||Cloud.status==="offline"))return false;
+  return true}
 async function cloudStart(){
   const cfg=cloudCfg();if(!cfg){Cloud.status="off";paintSync();return}
   Cloud.status="loading";paintSync();
-  try{await loadScript(SUPA_JS)}catch(e){Cloud.status="offline";paintSync();return} // sem internet: tenta de novo quando voltar
+  try{await loadScript(SUPA_JS)}catch(e){Cloud.status="offline";paintSync();render();return} // sem internet: tenta de novo quando voltar
   if(!Cloud.client){
     Cloud.client=window.supabase.createClient(cfg.url,cfg.anonKey,{auth:{persistSession:true,autoRefreshToken:true,storageKey:"etograma.auth"}});
     Cloud.client.auth.onAuthStateChange((ev,session)=>{if(ev==="PASSWORD_RECOVERY"){Cloud.recovery=true;go({name:"login"})}setTimeout(()=>setUser(session?.user||null),0)});
   }
   const{data}=await Cloud.client.auth.getSession();setUser(data.session?.user||null);
-  // ao abrir o app sem conta, mostra a tela de entrar (uma vez; "Continuar sem conta" é lembrado)
-  let skip=null;try{skip=localStorage.getItem(SEMCONTA)}catch(e){}
-  if(!data.session&&!skip&&!Cloud.autoShown&&view.name==="dash"){Cloud.autoShown=true;go({name:"login"})}
 }
 function setUser(u){const prev=Cloud.user?.id;Cloud.user=u;if(u)Cloud.mode="in"; // depois de sair, o cartão volta em "Entrar"
   
-  if(!u){Cloud.status="out";unsubscribe();paintSync();if(view.name==="settings")render();return}
+  if(!u){
+    // sessão vencida sem internet: quem já entrou neste aparelho continua trabalhando offline
+    if(syncState.user&&navigator.onLine===false){Cloud.status="offline";paintSync();return}
+    Cloud.status="out";Cloud.papel=null;unsubscribe();paintSync();render();return}
+  checkAcesso(u);
   if(view.name==="login"&&!Cloud.recovery)go({name:"dash"});
   if(prev===u.id)return;
   // outra conta neste aparelho: tira daqui o que veio da conta anterior (continua salvo no banco)
   if(syncState.user&&syncState.user!==u.id){Sync.forget(db,syncState.shadow);syncState={user:u.id,lastPull:null,shadow:{}};saveLocal()}
   syncState.user=u.id;saveSync();subscribe();syncNow();if(view.name==="settings")render();
 }
+// Confere se o e-mail ainda está na lista de acessos (o banco já bloqueia os dados; aqui a pessoa é avisada e sai).
+async function checkAcesso(u){
+  const{data,error}=await Cloud.client.from("acessos").select("papel").eq("email",String(u.email||"").toLowerCase()).maybeSingle();
+  if(Cloud.user?.id!==u.id)return;
+  if(error){Cloud.papel=null;return} // sem internet, ou banco ainda sem a lista (schema antigo): não tranca ninguém
+  if(!data){Cloud.revogado="O seu e-mail não está na lista de acessos do Etograma. Peça ao administrador para incluir você.";
+    Sync.forget(db,syncState.shadow);syncState={user:null,lastPull:null,shadow:{}};saveSync();saveLocal();unsubscribe();
+    await Cloud.client.auth.signOut();return}
+  const antes=Cloud.papel;Cloud.papel=data.papel;if(antes!==data.papel&&view.name==="settings")render()}
 function subscribe(){unsubscribe();if(!Cloud.client)return;
   Cloud.channel=Cloud.client.channel("etograma-"+uid()).on("postgres_changes",{event:"*",schema:"public"},()=>schedule(1200)).subscribe()}
 function unsubscribe(){if(Cloud.channel){try{Cloud.client.removeChannel(Cloud.channel)}catch(e){}Cloud.channel=null}}
@@ -2055,9 +2081,33 @@ function wireCloudCard(){
   paintSync();
 }
 
+// Lista de e-mails autorizados (tabela "acessos"). Só o administrador vê e altera.
+function acessosCard(){return`<section class="card cloud" id="acCard"><div class="card-h"><div><h3>Acessos</h3><p>Só os e-mails desta lista conseguem criar conta e ver os dados. Retirar um e-mail corta o acesso na hora.</p></div></div>
+  <form class="row" id="acForm" style="flex-wrap:wrap"><input type="email" id="acMail" placeholder="email@exemplo.com" autocomplete="off" spellcheck="false" required style="flex:1 1 220px;max-width:340px" aria-label="E-mail para liberar">
+    <select id="acPapel" style="width:auto" aria-label="Papel"><option value="membro">Membro</option><option value="admin">Administrador</option></select><button class="btn primary" type="submit">${icon("plus")}Liberar acesso</button></form>
+  <p class="note" id="acMsg"></p><div class="list" id="acList"><div class="item"><span class="note">Carregando…</span></div></div></section>`}
+async function wireAcessos(){
+  const card=$("#acCard",app);if(!card)return;
+  const me=String(Cloud.user?.email||"").toLowerCase(),msg=t=>{$("#acMsg",card).textContent=t};
+  const load=async()=>{const{data,error}=await Cloud.client.from("acessos").select("email,papel,created_at").order("papel").order("email");
+    if(!card.isConnected)return;const box=$("#acList",card);
+    if(error){box.innerHTML=`<div class="item"><span class="note">${esc(ptErr(error))}</span></div>`;return}
+    box.innerHTML=data.map(a=>`<div class="item"><div class="grow"><b>${esc(a.email)}</b>${a.email===me?' <span class="note">(você)</span>':""}</div>
+      <span class="pill ${a.papel==="admin"?"good":"neutral"}">${a.papel==="admin"?"Administrador":"Membro"}</span>
+      <span class="ac-act">${a.email===me?"":`<button class="btn sm quiet danger" data-acrm="${esc(a.email)}">Retirar</button>`}</span></div>`).join("");
+    $$("[data-acrm]",box).forEach(b=>b.onclick=async()=>{if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar?";return}
+      const{error}=await Cloud.client.from("acessos").delete().eq("email",b.dataset.acrm);if(error)return msg(ptErr(error));
+      msg(`Acesso de ${b.dataset.acrm} retirado.`);load()})};
+  $("#acForm",card).onsubmit=async ev=>{ev.preventDefault();const email=$("#acMail",card).value.trim().toLowerCase(),papel=$("#acPapel",card).value;
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))return msg("Digite um e-mail válido.");
+    const{error}=await Cloud.client.from("acessos").upsert({email,papel});
+    if(error)return msg(/duplicate|conflict/i.test(error.message)?"Esse e-mail já está na lista.":ptErr(error));
+    $("#acMail",card).value="";msg(`${email} liberado. A pessoa já pode criar a conta na tela de entrar.`);load()};
+  load();
+}
+
 /* ================= ENTRAR (tela de login) ================= */
 // Tela cheia: à esquerda um "etograma vivo" (baias × horários sendo marcados), à direita o formulário.
-const SEMCONTA="etograma.semconta";
 const ETO_ROWS=["Baia 1","Baia 2","Baia 3","Baia 4","Baia 5","Baia 6"],ETO_COLS=24;
 const ETO_C=[["Ruminando","var(--s1)",.42],["Comendo","var(--accent)",.24],["Ócio","var(--s3)",.24],["Bebendo","var(--s4)",.10]];
 const reduceMotion=()=>window.matchMedia&&matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -2066,8 +2116,9 @@ function authBody(){
   if(Cloud.recovery)return`<h2>Criar nova senha</h2><p class="muted">Escolha uma senha nova para a sua conta.</p>
     <form id="lf" class="stack" novalidate>${authField("lPass","password","Nova senha (mínimo 6)","new-password",true)}
     <button class="btn primary auth-go" type="submit"><span class="lbl">Salvar senha</span><span class="spin"></span></button><p class="auth-msg" id="lMsg" role="status" aria-live="polite"></p></form>`;
-  if(!Cloud.client)return`<h2>Sem conexão</h2><p class="muted">${cloudCfg()?"Não deu para falar com o banco agora. O app funciona sem internet e guarda tudo neste aparelho.":"Este app ainda não está ligado a um banco de dados."}</p>
-    <div class="stack">${cloudCfg()?`<button class="btn primary auth-go" id="lRetry" type="button"><span class="lbl">Tentar de novo</span><span class="spin"></span></button>`:""}<button class="linkbtn" id="lSkip" type="button">Continuar sem conta →</button></div>`;
+  if(!Cloud.client&&Cloud.status!=="offline")return`<h2>Conectando…</h2><p class="muted">Um instante.</p>`;
+  if(!Cloud.client)return`<h2>Sem conexão</h2><p class="muted">Para entrar pela primeira vez neste aparelho é preciso internet. Depois de entrar, o app funciona sem sinal no curral.</p>
+    <div class="stack"><button class="btn primary auth-go" id="lRetry" type="button"><span class="lbl">Tentar de novo</span><span class="spin"></span></button></div>`;
   const up=Cloud.mode==="up";
   return`<div class="auth-tabs" role="tablist" aria-label="Entrar ou criar conta" data-mode="${up?"up":"in"}"><span class="pill-bg"></span><button type="button" role="tab" aria-selected="${!up}" data-m="in">Entrar</button><button type="button" role="tab" aria-selected="${up}" data-m="up">Criar conta</button></div>
     <div class="auth-swap"><h2>${up?"Criar sua conta":"Bem-vindo de volta"}</h2><p class="muted">${up?"Cada observador usa a própria conta e entra no experimento com o código do responsável.":"Entre para juntar as suas marcações com as da equipe."}</p>
@@ -2076,7 +2127,7 @@ function authBody(){
       <button class="btn primary auth-go" type="submit"><span class="lbl">${up?"Criar conta":"Entrar"}</span><span class="spin"></span><svg class="i arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
       <p class="auth-msg" id="lMsg" role="status" aria-live="polite"></p>
     </form>
-    <div class="auth-alt">${up?"<span></span>":`<button type="button" class="linkbtn" id="lForgot">Esqueci a senha</button>`}<button type="button" class="linkbtn" id="lSkip">Continuar sem conta →</button></div></div>`;
+    <div class="auth-alt">${up?"":`<button type="button" class="linkbtn" id="lForgot">Esqueci a senha</button>`}<span class="auth-lock">${icon("lock")}Acesso só para e-mails autorizados</span></div></div>`;
 }
 VIEWS.login=function(){
   if(Cloud.user&&!Cloud.recovery)return go({name:"dash"});
@@ -2098,7 +2149,7 @@ VIEWS.login=function(){
       <div class="auth-facts fx" style="--i:5"><div><b class="num">12</b><span>baias</span></div><div><b class="num">288</b><span>marcações / 24 h</span></div><div><b>Offline</b><span>primeiro</span></div></div>
     </section>
     <section class="auth-panel"><div class="auth-card fx" style="--i:2" id="authCard">${authBody()}</div>
-      <p class="auth-foot fx" style="--i:4">Sem conta, tudo fica salvo só neste aparelho.</p>
+      <p class="auth-foot fx" style="--i:4">Não tem acesso? Peça ao administrador do experimento para incluir o seu e-mail.</p>
       <a class="lp-more fx" style="--i:5" href="#lpHist" data-lp="lpHist">Conheça o projeto<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M6 13l6 6 6-6"/></svg></a></section>
   </div></div>
   <div class="lp-body">${lpBody()}</div></div>`;
@@ -2120,6 +2171,7 @@ VIEWS.login=function(){
   const art=$("#authArt",app);
   if(matchMedia("(hover: hover)").matches)art.addEventListener("pointermove",ev=>{const b=art.getBoundingClientRect();art.style.setProperty("--mx",(ev.clientX-b.left)+"px");art.style.setProperty("--my",(ev.clientY-b.top)+"px")});
   wireAuth();wireLanding();
+  if(Cloud.revogado){const m=$("#lMsg",app);if(m){m.textContent=Cloud.revogado;m.className="auth-msg err"}Cloud.revogado=""}
 };
 
 /* ---------- apresentação abaixo do login: história, como funciona, linguagens ---------- */
@@ -2152,7 +2204,7 @@ function lpBody(){
     <div class="lp-lang rv" role="img" aria-label="${LP_LANG.map(l=>l[0]+" "+(l[1]<1?"menos de 1":l[1])+"%").join(", ")}">${LP_LANG.map(l=>`<i style="--w:${l[1]}%;background:${l[2]}"></i>`).join("")}</div>
     <div class="lp-langs">${LP_LANG.map(l=>`<div class="lp-l rv"><span class="lp-dot" style="background:${l[2]}"></span><div><h3>${l[0]} <small class="num">${l[1]<1?"&lt;1":l[1]}%</small></h3><p>${l[3]}</p></div></div>`).join("")}</div>
     <p class="lp-stack rv">${["Node.js (testes e build)","Supabase","GitHub Pages","Claude (IA)","CSV para R / SAS"].map(s=>`<span>${s}</span>`).join("")}</p></section>
-  <section class="lp-cta"><h2>Pronto para a<br>próxima <em>marcação</em>?</h2><div class="row"><button class="btn primary" type="button" data-lp="entrar">Entrar ou criar conta</button><button class="btn lp-ghost" type="button" data-lp="skip">Continuar sem conta</button></div>
+  <section class="lp-cta"><h2>Pronto para a<br>próxima <em>marcação</em>?</h2><div class="row"><button class="btn primary" type="button" data-lp="entrar">Entrar ou criar conta</button></div>
     <p>Etograma · comportamento animal · Zootecnia</p></section>`;
 }
 function wireLanding(){
@@ -2161,7 +2213,6 @@ function wireLanding(){
   const still=reduceMotion(),clamp=x=>Math.max(0,Math.min(1,x));
   // navegação: links rolam até a seção; "Entrar" leva ao formulário
   $$("[data-lp]",app).forEach(a=>a.onclick=ev=>{ev.preventDefault();const k=a.dataset.lp,smooth=still?"auto":"smooth";
-    if(k==="skip"){try{localStorage.setItem(SEMCONTA,"1")}catch(e){}return go({name:"dash"})}
     if(k==="top")return window.scrollTo({top:0,behavior:smooth});
     if(k==="entrar"){
       // o cartão está dentro do topo que gruda: scrollIntoView leria a posição grudada e subiria só um pouco a cada toque.
@@ -2211,7 +2262,6 @@ function wireAuth(){
     setTimeout(()=>{const keep=$("#lMail",card)?.value||"";card.innerHTML=authBody();$(".auth-swap",card).classList.add("in");const m=$("#lMail",card);if(m)m.value=keep;wireAuth();($("#lNome",card)||$("#lMail",card)).focus()},170)});
   $$("[data-eye]",card).forEach(b=>b.onclick=()=>{const i=$("#"+b.dataset.eye,card),show=i.type==="password";i.type=show?"text":"password";
     b.setAttribute("aria-pressed",show);b.setAttribute("aria-label",show?"Esconder senha":"Mostrar senha");b.classList.toggle("on",show)});
-  const sk=$("#lSkip",card);if(sk)sk.onclick=()=>{try{localStorage.setItem(SEMCONTA,"1")}catch(e){}go({name:"dash"})};
   const rt=$("#lRetry",card);if(rt)rt.onclick=async()=>{busy(true);await cloudStart();if(view.name==="login")render()};
   const fg=$("#lForgot",card);if(fg)fg.onclick=async()=>{const email=$("#lMail",card).value.trim();if(!email){msg("Digite o seu e-mail e toque de novo em Esqueci a senha.","err");shake();$("#lMail",card).focus();return}
     const{error}=await Cloud.client.auth.resetPasswordForEmail(email,{redirectTo:location.href.split("#")[0]});
@@ -2229,7 +2279,6 @@ function wireAuth(){
     try{if(Cloud.mode==="up"){const{data,error}=await Cloud.client.auth.signUp({email,password,options:{data:{nome},emailRedirectTo:location.href.split("#")[0]}});if(error)throw error;
         if(!data.session){busy(false);card.classList.add("sent");msg(`Conta criada! Enviamos um e-mail para ${email}. Abra o link de confirmação e depois entre aqui.`,"ok");return}}
       else{const{error}=await Cloud.client.auth.signInWithPassword({email,password});if(error)throw error}
-      try{localStorage.removeItem(SEMCONTA)}catch(e){}
       card.classList.add("done");toast("Conectado. Sincronizando…") // setUser leva para o Início
     }catch(e){busy(false);msg(ptErr(e),"err");shake()}};
 }

@@ -10,6 +10,9 @@
 -- • Cada pessoa entra com e-mail e senha. Quem cria um experimento vira
 --   "responsavel"; os observadores entram nele com o código de convite.
 -- • Ninguém vê experimentos dos quais não participa (Row Level Security).
+-- • Acesso restrito: só cria conta quem está na lista "acessos" (o administrador
+--   inclui os e-mails pela tela Ajustes → Acessos). Tirar o e-mail da lista corta o
+--   acesso aos dados na hora, mesmo que a pessoa já tenha conta.
 -- • Nada é apagado de verdade pelo app: linhas apagadas ficam com deleted = true
 --   para que a exclusão chegue aos outros aparelhos.
 -- =====================================================================
@@ -18,6 +21,13 @@
 create table if not exists public.profiles (
   id         uuid primary key references auth.users(id) on delete cascade,
   nome       text,
+  created_at timestamptz not null default now()
+);
+
+-- e-mails autorizados a usar o app (em minúsculas). "admin" gerencia a lista.
+create table if not exists public.acessos (
+  email      text primary key check (email = lower(trim(email)) and email like '%_@_%'),
+  papel      text not null default 'membro' check (papel in ('admin', 'membro')),
   created_at timestamptz not null default now()
 );
 
@@ -131,15 +141,42 @@ grant usage on schema private to authenticated;
 create or replace function public.touch() returns trigger language plpgsql set search_path = '' as $$
 begin new.updated_at := clock_timestamp(); return new; end $$;
 
+create or replace function private.meu_email() returns text
+language sql stable security definer set search_path = '' as $$
+  select lower(email) from auth.users where id = (select auth.uid())
+$$;
+
+-- o e-mail de quem está logado está na lista de acessos?
+create or replace function private.tem_acesso() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.acessos where email = private.meu_email())
+$$;
+
+create or replace function private.is_admin() returns boolean
+language sql stable security definer set search_path = '' as $$
+  select exists (select 1 from public.acessos where email = private.meu_email() and papel = 'admin')
+$$;
+
+-- membro do experimento E com acesso liberado (tirar da lista corta o acesso na hora)
 create or replace function private.is_member(exp text) returns boolean
 language sql stable security definer set search_path = '' as $$
-  select exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()))
+  select private.tem_acesso() and exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()))
 $$;
 
 create or replace function private.is_responsavel(exp text) returns boolean
 language sql stable security definer set search_path = '' as $$
-  select exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()) and papel = 'responsavel')
+  select private.tem_acesso() and exists (select 1 from public.experiment_members where experiment_id = exp and user_id = (select auth.uid()) and papel = 'responsavel')
 $$;
+
+-- cadastro só para e-mails da lista (vale também para quem tentar criar conta por fora do app)
+create or replace function public.check_acesso() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.email is null or not exists (select 1 from public.acessos where email = lower(trim(new.email))) then
+    raise exception 'EMAIL_SEM_ACESSO: este e-mail não está na lista de acessos do Etograma';
+  end if;
+  return new;
+end $$;
 
 -- quem cria o experimento vira responsável automaticamente
 create or replace function public.add_owner_member() returns trigger
@@ -182,6 +219,7 @@ language plpgsql security definer set search_path = '' as $$
 declare v_id text;
 begin
   if auth.uid() is null then raise exception 'Faça login primeiro'; end if;
+  if not private.tem_acesso() then raise exception 'EMAIL_SEM_ACESSO: sem acesso ao Etograma'; end if;
   select id into v_id from public.experiments where codigo = upper(trim(p_codigo)) and not deleted;
   if v_id is null then raise exception 'Código não encontrado'; end if;
   insert into public.experiment_members(experiment_id, user_id, papel) values (v_id, auth.uid(), 'observador')
@@ -205,10 +243,13 @@ drop trigger if exists experiments_guard on public.experiments;
 create trigger experiments_guard before update on public.experiments for each row execute function public.guard_experiment();
 drop trigger if exists sessions_guard on public.sessions;
 create trigger sessions_guard before update on public.sessions for each row execute function public.guard_session();
+drop trigger if exists on_auth_user_check on auth.users;
+create trigger on_auth_user_check before insert on auth.users for each row execute function public.check_acesso();
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute function public.handle_new_user();
 
 -- ---------- segurança (Row Level Security) ----------
+alter table public.acessos            enable row level security;
 alter table public.profiles           enable row level security;
 alter table public.experiments        enable row level security;
 alter table public.experiment_members enable row level security;
@@ -217,6 +258,16 @@ alter table public.animals            enable row level security;
 alter table public.weighings          enable row level security;
 alter table public.intakes            enable row level security;
 alter table public.sessions           enable row level security;
+
+drop policy if exists acessos_select on public.acessos;
+create policy acessos_select on public.acessos for select to authenticated using (email = private.meu_email() or private.is_admin());
+drop policy if exists acessos_insert on public.acessos;
+create policy acessos_insert on public.acessos for insert to authenticated with check (private.is_admin());
+drop policy if exists acessos_update on public.acessos;
+create policy acessos_update on public.acessos for update to authenticated
+  using (private.is_admin() and email <> private.meu_email()) with check (private.is_admin() and email <> private.meu_email());
+drop policy if exists acessos_delete on public.acessos;
+create policy acessos_delete on public.acessos for delete to authenticated using (private.is_admin() and email <> private.meu_email());
 
 drop policy if exists profiles_select on public.profiles;
 create policy profiles_select on public.profiles for select to authenticated using (
@@ -227,9 +278,9 @@ drop policy if exists profiles_update on public.profiles;
 create policy profiles_update on public.profiles for update to authenticated using (id = (select auth.uid())) with check (id = (select auth.uid()));
 
 drop policy if exists experiments_select on public.experiments;
-create policy experiments_select on public.experiments for select to authenticated using (owner = (select auth.uid()) or private.is_member(id));
+create policy experiments_select on public.experiments for select to authenticated using (private.tem_acesso() and (owner = (select auth.uid()) or private.is_member(id)));
 drop policy if exists experiments_insert on public.experiments;
-create policy experiments_insert on public.experiments for insert to authenticated with check (owner = (select auth.uid()));
+create policy experiments_insert on public.experiments for insert to authenticated with check (owner = (select auth.uid()) and private.tem_acesso());
 drop policy if exists experiments_update on public.experiments;
 create policy experiments_update on public.experiments for update to authenticated using (private.is_member(id)) with check (private.is_member(id));
 
@@ -250,14 +301,14 @@ end $$;
 
 drop policy if exists sessions_select on public.sessions;
 create policy sessions_select on public.sessions for select to authenticated
-  using (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id)));
+  using (private.tem_acesso() and (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id))));
 drop policy if exists sessions_insert on public.sessions;
 create policy sessions_insert on public.sessions for insert to authenticated
-  with check (owner = (select auth.uid()) and (experiment_id is null or private.is_member(experiment_id)));
+  with check (owner = (select auth.uid()) and private.tem_acesso() and (experiment_id is null or private.is_member(experiment_id)));
 drop policy if exists sessions_update on public.sessions;
 create policy sessions_update on public.sessions for update to authenticated
-  using (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id)))
-  with check (experiment_id is null and owner = (select auth.uid()) or experiment_id is not null and private.is_member(experiment_id));
+  using (private.tem_acesso() and (owner = (select auth.uid()) or (experiment_id is not null and private.is_member(experiment_id))))
+  with check (private.tem_acesso() and (experiment_id is null and owner = (select auth.uid()) or experiment_id is not null and private.is_member(experiment_id)));
 
 -- versões antigas das funções auxiliares (ficavam expostas na API)
 drop function if exists public.is_member(text);
@@ -267,13 +318,25 @@ grant usage on schema public to authenticated;
 grant select, insert, update, delete on public.experiments, public.experiment_members, public.treatments,
   public.animals, public.weighings, public.intakes, public.sessions to authenticated;
 grant select, update on public.profiles to authenticated;
+grant select, insert, update, delete on public.acessos to authenticated;
 revoke all on function public.join_experiment(text) from public, anon;
 grant execute on function public.join_experiment(text) to authenticated;
-revoke all on function private.is_member(text), private.is_responsavel(text) from public, anon;
-grant execute on function private.is_member(text), private.is_responsavel(text) to authenticated;
+revoke all on function private.is_member(text), private.is_responsavel(text), private.meu_email(), private.tem_acesso(), private.is_admin() from public, anon;
+grant execute on function private.is_member(text), private.is_responsavel(text), private.meu_email(), private.tem_acesso(), private.is_admin() to authenticated;
 -- funções de gatilho não são chamadas pela API (o gatilho roda mesmo assim)
 revoke all on function public.touch(), public.add_owner_member(), public.guard_experiment(),
-  public.guard_session(), public.handle_new_user() from public, anon, authenticated;
+  public.guard_session(), public.handle_new_user(), public.check_acesso() from public, anon, authenticated;
+
+-- ---------- lista de acessos: primeira vez ----------
+-- Quando a lista ainda está vazia, quem já tem conta entra nela como "membro"
+-- (ninguém fica trancado do lado de fora). Rodar de novo não traz de volta quem foi retirado.
+insert into public.acessos(email)
+select distinct lower(email) from auth.users
+where email is not null and not exists (select 1 from public.acessos)
+on conflict do nothing;
+-- O primeiro administrador é definido à mão, uma vez (troque pelo seu e-mail):
+--   insert into public.acessos(email, papel) values ('seu-email@exemplo.com', 'admin')
+--   on conflict (email) do update set papel = 'admin';
 
 -- ---------- tempo real (outros celulares recebem as mudanças na hora) ----------
 do $$

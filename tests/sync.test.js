@@ -71,6 +71,9 @@ const fresh = () => ({ v: 2, active: null, species: [], experiments: [], session
   const back = Sync.applyRows(fresh(), JSON.parse(JSON.stringify(rows)));
   assert.strictEqual(Sync.stable(Sync.toRows(back)), Sync.stable(rows), "ida e volta");
   assert.strictEqual(Sync.stable({ b: 1, a: [2, { d: 1, c: 2 }] }), Sync.stable({ a: [2, { c: 2, d: 1 }], b: 1 }));
+  // experimento antigo sem rótulo é identificado pelo brinco no app: sobe como "Animal", não como "Baia"
+  const semRotulo = mkDb(); delete semRotulo.experiments.find(e => e.id === "e1").rotulo;
+  assert.strictEqual(Sync.toRows(semRotulo).experiments[0].rotulo, "Animal", "sem rótulo = brinco");
 
   // Aparelho A envia tudo; segundo envio não manda nada
   const srv = fakeServer(); const A = mkDb(), shA = {};
