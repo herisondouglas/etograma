@@ -64,7 +64,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
 - Sair da conta: bloqueado se houver pendências; depois remove do aparelho o que veio do banco (`Sync.forget`). Outra conta no mesmo aparelho também limpa.
 - Restaurar cópia / Apagar tudo com login: zera a sombra (vira mesclagem; nada é apagado no banco).
 - supabase-js 2.45.4 carregado do jsDelivr só quando há configuração.
-- Testes do SQL: rodados com PGlite (Postgres em WASM) simulando `auth.uid()`; o roteiro não está no repo (precisa de `npm i @electric-sql/pglite`).
+- Testes do SQL: `tests/navegador/banco.mjs` roda o schema no PGlite (Postgres em WASM) simulando `auth.uid()` (precisa de `npm i @electric-sql/pglite` numa pasta à parte; veja tests/navegador/README.md).
 
 ### Integrações que só existem dentro do Claude (Artifact)
 `window.claude.use("sample")` (IA: interpretar estatística e Visão IA) e `window.claude.use("downloads")`.
@@ -134,6 +134,8 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 
 - [x] Sincronização online com Supabase + login + convite por código. Projeto Supabase `mzsafqmrorepalkxvdhw` (schema v2 aplicado).
 - [x] Publicado: código em https://github.com/herisondouglas/etograma (ramo `main`), app em **https://herisondouglas.github.io/etograma/** (GitHub Pages, atualiza sozinho a cada push).
+- [x] (10/10/2026) Tela de entrar + apresentação com rolagem; acesso restrito (login obrigatório + lista `acessos`, admins: o dono do projeto e herisondouglas.hd@gmail.com); fase de adaptação; espécies zootécnicas + científico + nova espécie; app zerado (sem exemplo) e banco limpo para os **testes do cliente**.
+- [ ] **Próximo:** ouvir o retorno do cliente sobre os testes e corrigir. Perguntas ainda abertas para ele: sorteio das dietas (DIC ou blocos), troca de dieta entre períodos, datas reais das etapas de adaptação.
 - [ ] Backend para a IA (Visão IA e interpretação) fora do Claude.
 - [ ] PWA (instalar no celular, funcionar 100% offline no curral, notificação a cada 5 min).
 - [ ] Ajustar as colunas à planilha de papel que a faculdade já usa (foto ainda não enviada).
@@ -142,6 +144,9 @@ Visão IA: em cada horário vale só o primeiro quadro (varredura instantânea) 
 - [ ] Separar `app.js` em módulos quando crescer (views/, charts/, data/).
 
 ## Comandos
+
+- Testes de ponta a ponta (Chrome headless + Supabase falso) e do banco: `tests/navegador/` (veja o README de lá). Rode depois de `npm run build`.
+- Trabalho com o usuário: ele aprova uma build antes do push ("crie uma build para aprovação"); mudanças no banco ele mesmo roda no SQL Editor (o MCP do Supabase só para leitura).
 
 - Publicar: `git push` (o GitHub Pages republica em 1–2 min). No Supabase, Authentication → URL Configuration deve ter o endereço publicado (Site URL) e `http://localhost:5173` (Redirect URLs).
 
