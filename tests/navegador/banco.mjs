@@ -36,7 +36,7 @@ check("experimento criado com dono e código", e1.owner === U1 && /^[0-9A-F]{6}$
 check("criador vira responsável", (await q("select papel from experiment_members where experiment_id='e1'"))[0]?.papel === "responsavel");
 await up("treatments", ["id", "experiment_id", "nome", "gmd_meta", "cor", "ordem"], ["g40", "e1", "Dieta 40%", 1.0, "azul", 0]);
 await up("animals", ["id", "experiment_id", "treatment_id", "baia"], ["a1", "e1", "g40", "1"]);
-await up("weighings", ["id", "experiment_id", "data", "pesos"], ["w1", "e1", "2026-08-15", JSON.stringify({ a1: 350.5 })]);
+await up("weighings", ["id", "experiment_id", "data", "pesos", "jejum"], ["w1", "e1", "2026-08-15", JSON.stringify({ a1: 350.5 }), 16]);
 await up("sessions", ["id", "experiment_id", "nome", "comp", "animais", "animal_ids", "inicio", "intervalo", "duracao", "marks"],
   ["s1", "e1", "Etograma", JSON.stringify([{ id: "c1", nome: "Ruminando", tipo: "comum" }, { id: "c2", nome: "Deitada", tipo: "comum" }]), JSON.stringify(["Baia 1"]), JSON.stringify(["a1"]), Date.UTC(2026, 9, 4, 10), 5, 24, JSON.stringify({ 0: { 0: ["c1", "c2"], 1: ["c1"] } })]);
 check("responsável grava tratamentos, animais, pesagens e observações", (await q("select count(*)::int n from animals")).at(0).n === 1);
@@ -71,8 +71,8 @@ check("responsável edita observação de outro; dono mantido", (await q("select
 check("responsável vê os 2 membros", (await q("select * from experiment_members where experiment_id='e1'")).length === 2);
 
 // Visões para análise
-const pes = await q("select baia, tratamento, peso_kg from vw_pesagens");
-check("vw_pesagens em formato longo", pes.length === 1 && pes[0].baia === "1" && pes[0].tratamento === "Dieta 40%" && +pes[0].peso_kg === 350.5, JSON.stringify(pes));
+const pes = await q("select baia, tratamento, peso_kg, jejum_h from vw_pesagens");
+check("vw_pesagens em formato longo", pes.length === 1 && pes[0].baia === "1" && pes[0].tratamento === "Dieta 40%" && +pes[0].peso_kg === 350.5 && +pes[0].jejum_h === 16, JSON.stringify(pes));
 const mk = await q("select animal, animal_id, comportamento, horario from vw_marcacoes where observacao_id='s1' order by horario, comportamento");
 check("vw_marcacoes: uma linha por X com nome do comportamento", mk.length === 3 && mk.map(m => m.comportamento).join() === "Deitada,Ruminando,Ruminando" && mk[0].animal === "Baia 1" && mk[0].animal_id === "a1", JSON.stringify(mk));
 check("vw_marcacoes: horário certo (10:00 e 10:05 UTC)", new Date(mk[0].horario).toISOString() === "2026-10-04T10:00:00.000Z" && new Date(mk[2].horario).toISOString() === "2026-10-04T10:05:00.000Z");

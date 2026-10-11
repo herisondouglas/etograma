@@ -22,7 +22,7 @@ const Sync=(function(){
       // config (opções da adaptação/análise) e etapas só vão quando existem: experimentos antigos não mudam
       (e.grupos||[]).forEach((g,i)=>out.treatments.push({id:g.id,experiment_id:e.id,nome:g.nome||"Tratamento",dieta:nn(g.dieta),gmd_meta:g.gmdMeta!==""&&g.gmdMeta!=null&&isFinite(+g.gmdMeta)?+g.gmdMeta:null,cor:nn(g.cor),ordem:i,...(g.etapas?{etapas:g.etapas}:{})}));
       for(const a of e.animais||[])out.animals.push({id:a.id,experiment_id:e.id,treatment_id:nn(a.grupoId),baia:nn(a.baia),brinco:nn(a.brinco),raca:nn(a.raca),sexo:nn(a.sexo),nascimento:nn(a.nascimento),obs:nn(a.obs),saida:a.saida||null});
-      for(const p of e.pesagens||[])out.weighings.push({id:p.id,experiment_id:e.id,data:p.data,pesos:p.pesos||{}});
+      for(const p of e.pesagens||[])out.weighings.push({id:p.id,experiment_id:e.id,data:p.data,pesos:p.pesos||{},...(p.jejum!=null&&p.jejum!==""?{jejum:+p.jejum}:{})}); // jejum só vai quando informado
       for(const c of e.consumo||[])out.intakes.push({id:c.id,experiment_id:e.id,data:c.data,valores:c.valores||{}});
     }
     for(const s of db.sessions){if(s.exemplo||(s.expId&&!ids.has(s.expId)))continue; // exemplo nunca vai para o banco
@@ -47,7 +47,7 @@ const Sync=(function(){
       const o=i>=0?arr[i]:{id:r.id};build(o,r);if(i<0)arr.push(o)}};
     child("treatments","grupos",(g,r)=>{g.nome=r.nome;setOpt(g,"dieta",r.dieta);setOpt(g,"cor",r.cor);if(r.gmd_meta==null)delete g.gmdMeta;else g.gmdMeta=+r.gmd_meta;if(r.etapas!==undefined)setOpt(g,"etapas",r.etapas);ordem[r.id]=+r.ordem||0});
     child("animals","animais",(a,r)=>{a.grupoId=r.treatment_id;a.baia=r.baia??"";a.brinco=r.brinco??"";for(const k of ["raca","sexo","nascimento","obs","saida"])setOpt(a,k,r[k])});
-    child("weighings","pesagens",(p,r)=>{p.data=r.data;p.pesos=r.pesos||{}});
+    child("weighings","pesagens",(p,r)=>{p.data=r.data;p.pesos=r.pesos||{};if(r.jejum!==undefined)setOpt(p,"jejum",r.jejum==null?null:+r.jejum)});
     child("intakes","consumo",(c,r)=>{c.data=r.data;c.valores=r.valores||{}});
     for(const e of db.experiments)if(e.grupos.some(g=>g.id in ordem))e.grupos=e.grupos.map((g,i)=>[g,g.id in ordem?ordem[g.id]:i]).sort((x,y)=>x[1]-y[1]).map(x=>x[0]);
     for(const r of rows.sessions||[]){if(skip("sessions",r.id)&&!r.deleted)continue;const i=db.sessions.findIndex(s=>s.id===r.id);

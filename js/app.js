@@ -7,6 +7,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&
 const isoDay=d=>d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
 const fmt=(v,d=1)=>isFinite(v)?Number(v).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d}):"—";
 const fmtP=p=>!isFinite(p)?"—":p<0.001?"< 0,001":fmt(p,3);
+const pEq=p=>isFinite(p)&&p<0.001?"p < 0,001":"p = "+fmtP(p); // "p < 0,001" em vez de "p = < 0,001"
 const fmtDur=min=>{min=Math.round(min);const h=Math.floor(min/60),m=min%60;return h?(h+" h"+(m?" "+pad(m):"")):m+" min"};
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function gauss(r){let u=0,v=0;while(!u)u=r();while(!v)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
@@ -72,9 +73,9 @@ function exampleData(species){
     if(a.id==="a5")gmd=1.08; if(a.id==="a8")gmd=.74;
     truth[a.id]={eat,rum,gmd,p0:Math.round(372+gauss(r)*18),cms:(A?10.6:9.7)+gauss(r)*.55};});
   const dates=[0,28,56].map(d=>{const x=new Date(start);x.setDate(x.getDate()+d);return isoDay(x)});
-  const pesagens=dates.map((d,k)=>({id:uid(),data:d,pesos:Object.fromEntries(animais.map(a=>{const t=truth[a.id];return[a.id,Math.round((t.p0+t.gmd*k*28+gauss(r)*2.5)*2)/2]}))}));
+  const pesagens=dates.map((d,k)=>({id:uid(),data:d,jejum:16,pesos:Object.fromEntries(animais.map(a=>{const t=truth[a.id];return[a.id,Math.round((t.p0+t.gmd*k*28+gauss(r)*2.5)*2)/2]}))}));
   const consumo=dates.slice(1).map(d=>({id:uid(),data:d,valores:Object.fromEntries(animais.map(a=>[a.id,Math.round((truth[a.id].cms+gauss(r)*.25)*10)/10]))}));
-  const exp={id:"exemplo",exemplo:true,exemploV:4,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",grupos:[gB,gA],animais,pesagens,consumo};
+  const exp={id:"exemplo",exemplo:true,exemploV:4,nome:"Confinamento Nelore",especieId:sp.id,especie:sp.nome,responsavel:"Raquel",inicio:dates[0],rotulo:"Baia",config:{pesagem:{on:true,ini:dates[0],fim:dates[2],jejum:16}},grupos:[gB,gA],animais,pesagens,consumo};
   // etograma 24 h, 6 observadores × 2 animais
   const sessStart=new Date(start);sessStart.setDate(sessStart.getDate()+50);sessStart.setHours(7,0,0,0);
   const comp=sp.comp.map(c=>({...c}));const id=n=>comp.find(c=>c.nome.startsWith(n))?.id;
@@ -174,9 +175,13 @@ const shortName=(e,x)=>porBaia(e)?aName(e,x):idOf(e,x);
 /* ================= cálculos (funções em js/data.js) ================= */
 // Fase de adaptação: com "só dieta final" (padrão), GMD, consumo e comportamento contam a partir da dieta final de cada tratamento.
 const soFinal=e=>Data.temAdaptacao(e)&&(e.config?.analise||"final")==="final";
-const performance=e=>Data.performance(e,{soFinal:soFinal(e)});
+// Jejum nas pesagens: com pesagens fora do jejum padrão, por padrão o GMD usa só as do jejum padrão (config.pesagem.gmd="todas" desliga)
+const jejumPadrao=e=>{const j=e.config?.pesagem?.jejum;return j==null||j===""||!isFinite(+j)?null:+j};
+const jejumMisto=e=>jejumPadrao(e)!=null&&Data.pesagensFora(e,jejumPadrao(e)).length>0;
+const jejumGMD=e=>jejumMisto(e)&&e.config?.pesagem?.gmd!=="todas"?jejumPadrao(e):undefined;
+const performance=e=>Data.performance(e,{soFinal:soFinal(e),jejum:jejumGMD(e)});
 const sessionAnimalId=Data.sessionAnimalId;
-const dataset=e=>Data.dataset(e,db.sessions,{soFinal:soFinal(e)});
+const dataset=e=>Data.dataset(e,db.sessions,{soFinal:soFinal(e),jejum:jejumGMD(e)});
 const pct=v=>(Number.isInteger(+v)?String(+v):fmt(+v,1))+"%";
 const volumoso=e=>e.config?.volumoso||"Silagem";
 // Faixa "Fase de adaptação" em Desempenho e Estatística: escolhe se a adaptação entra na conta
@@ -184,8 +189,13 @@ function analiseBar(e){if(!Data.temAdaptacao(e))return"";const fin=soFinal(e);
   const d=[...new Set(e.grupos.map(g=>Data.inicioFinal(g)).filter(Boolean))].sort().map(x=>dmy(parseDay(x)));
   return`<section class="card analise"><div class="spread"><div class="grow"><h3>Fase de adaptação</h3><p class="note">${fin?`Contando só a dieta final (a partir de ${d.join(" / ")}, conforme o tratamento). A adaptação fica fora do GMD, do consumo e do comportamento.`:"Contando o período todo, com a adaptação junto."}</p></div>
     <div class="seg" role="group" aria-label="Período da análise"><button type="button" data-an="final" aria-pressed="${fin}">Só dieta final</button><button type="button" data-an="todo" aria-pressed="${!fin}">Período todo</button></div></div></section>`}
-function wireAnalise(e){const ph=$(".page-h",app);if(ph&&!$(".analise",app))ph.insertAdjacentHTML("afterend",analiseBar(e));
-  $$("[data-an]",app).forEach(b=>b.onclick=()=>{e.config={...(e.config||{}),analise:b.dataset.an};save();render()})}
+function jejumBar(e){if(!jejumMisto(e))return"";const so=jejumGMD(e)!=null,F=Data.pesagensFora(e,jejumPadrao(e)).sort((a,b)=>a.data<b.data?-1:1);
+  const lista=F.map(p=>`${dmy(parseDay(p.data)).slice(0,5)} (${jejumNome(p.jejum)})`).join(", ");
+  return`<section class="card analise jejumbar"><div class="spread"><div class="grow"><h3>Jejum nas pesagens</h3><p class="note">${F.length===1?"1 pesagem":`${F.length} pesagens`} com jejum diferente do padrão (${esc(jejumNome(jejumPadrao(e)))}): ${esc(lista)}. ${so?`${F.length===1?"Ela fica":"Elas ficam"} fora do GMD, do peso antes e depois e da estatística, para não misturar peso cheio com peso em jejum.`:"Todas as pesagens entram na conta, misturando condições de jejum."}</p></div>
+    <div class="seg" role="group" aria-label="Pesagens usadas no GMD"><button type="button" data-jg="padrao" aria-pressed="${so}">Só ${esc(jejumNome(jejumPadrao(e)))}</button><button type="button" data-jg="todas" aria-pressed="${!so}">Todas</button></div></div></section>`}
+function wireAnalise(e){const ph=$(".page-h",app);if(ph&&!$(".analise",app))ph.insertAdjacentHTML("afterend",analiseBar(e)+jejumBar(e));
+  $$("[data-an]",app).forEach(b=>b.onclick=()=>{e.config={...(e.config||{}),analise:b.dataset.an};save();render()});
+  $$("[data-jg]",app).forEach(b=>b.onclick=()=>{const c=e.config||{};e.config={...c,pesagem:{...(c.pesagem||{}),gmd:b.dataset.jg}};save();render()})}
 // Início: proporção de concentrado e volumoso de cada tratamento hoje
 function dietaCard(e){const G=e.grupos.filter(g=>Data.etapasDe(g).length);if(!G.length)return"";const hoje=isoDay(new Date()),vol=volumoso(e);
   return`<section class="card dieta" style="margin-top:16px"><div class="card-h"><div><h3>Dieta agora</h3><p>Concentrado / ${esc(vol.toLowerCase())} de cada tratamento hoje${Data.temAdaptacao(e)?` · análise: ${soFinal(e)?"só a dieta final":"período todo"}`:""}.</p></div><button class="btn sm" data-go="edit">Etapas</button></div>
@@ -195,6 +205,19 @@ function dietaCard(e){const G=e.grupos.filter(g=>Data.etapasDe(g).length);if(!G.
     const sub=!st?`Primeira etapa: ${pct(c)} de concentrado`:st.proxima?`Próxima troca ${dmy(parseDay(st.proxima))} (${falta===1?"amanhã":`em ${falta} dias`}): ${pct(E[st.i+1].conc)} de concentrado`:E.length>1?`Na dieta final desde ${dmy(parseDay(st.inicio))}`:"Sem fase de adaptação";
     return`<div class="item"><span class="dot" style="background:${gColor(e,g.id)}"></span><div class="grow"><div class="title">${esc(g.nome)} ${tag}</div><div class="sub">${sub}</div></div>
       <div class="mix" title="${pct(c)} concentrado · ${pct(100-c)} ${esc(vol.toLowerCase())}"><span class="mix-bar"><i style="width:${c}%"></i></span><span class="num">${pct(c)} / ${pct(100-c)}</span></div></div>`}).join("")}</div></section>`}
+
+// Início: pesagem inicial e final (quando o experimento tem "Pesagem antes e depois")
+function pesagemCard(e){const c=e.config?.pesagem;if(!c||!c.on)return"";
+  const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1),A=ativos(e),hoje=isoDay(new Date());
+  const nAt=p=>A.filter(a=>isFinite(p.pesos[a.id])).length,ini=pes[0],fin=c.fim?[...pes].reverse().find(p=>p.data>=c.fim&&p!==ini):null;
+  const quando=d=>{const n=dayDiff(hoje,d);return n===0?"hoje":n===1?"amanhã":n>0?`em ${n} dias`:n===-1?"ontem":`há ${-n} dias`};
+  const feita=p=>{const n=nAt(p),f=A.length-n,j=jejumNome(p.jejum);return`Feita em ${dmy(parseDay(p.data))}${j?` (${j})`:""} · ${n} de ${A.length} animais${f>0?` (falta${f>1?"m":""} ${f})`:""}`};
+  const item=(nome,ok,sub,btn)=>`<div class="item"><div class="grow"><div class="title">${nome} ${ok?`<span class="pill good">${icon("check")}Feita</span>`:`<span class="pill warn">${icon("clock")}Pendente</span>`}</div><div class="sub">${sub}</div></div>${btn}</div>`;
+  const b=(k,l,pri)=>`<button class="btn sm${pri?" primary":""}" data-pzgo="${k}">${l}</button>`;
+  const iniItem=ini?item("Pesagem inicial",true,feita(ini),nAt(ini)<A.length?b("edit:"+ini.id,"Completar"):""):item("Pesagem inicial",false,c.ini?`Prevista para ${dmy(parseDay(c.ini))} (${quando(c.ini)})`:"Antes de começar",b("inicial","Lançar",true));
+  const finItem=fin?item("Pesagem final",true,feita(fin),b("ver","Ver antes e depois",true)):item("Pesagem final",false,c.fim?`Prevista para ${dmy(parseDay(c.fim))} (${quando(c.fim)})`:"Sem data prevista: lance quando terminar",ini?b("final","Lançar",c.fim&&c.fim<=hoje):"");
+  return`<section class="card" style="margin-top:16px"><div class="card-h"><div><h3>Pesagem antes e depois</h3><p>${jejumTxt(e)?`Padrão: ${esc(jejumTxt(e))}. `:""}As pesagens do meio do caminho entram pelo Lançar pesagem.</p></div>${ini&&pes.length>1&&!fin?b("ver","Comparar"):""}</div>
+    <div class="list">${iniItem}${finItem}</div></section>`}
 
 /* ================= gráficos (SVG) ================= */
 function cw(full){const cs=getComputedStyle(app);const inner=app.clientWidth-parseFloat(cs.paddingLeft)-parseFloat(cs.paddingRight);const col=full||inner<672?inner:(inner-16)/2;return Math.max(290,Math.min(full?1000:620,Math.round(col-42)))}
@@ -243,6 +266,24 @@ function scatter(pts,reg,xl,yl){const W=cw(true);
   pts.forEach(p=>s+=`<circle cx="${X(p.x)}" cy="${Y(p.y)}" r="6.5" fill="${p.color}" stroke="var(--surface)" stroke-width="2" data-tip="${esc(p.tip)}"/>`);
   return s+"</svg>";
 }
+function dumbbell(rows){const W=cw(true);
+  const sm=W<460,lw=sm?62:96,vw=sm?46:74,ml=lw+8,mr=vw+8,rh=26,mt=24,pw=W-ml-mr;
+  const vals=rows.flatMap(r=>[r.a,r.b]).filter(isFinite);if(!vals.length)return"";
+  const t=Stats.niceTicks(Math.min(...vals),Math.max(...vals),Math.max(3,Math.min(6,Math.floor(pw/48)))),x0=t[0],x1=t[t.length-1],X=v=>ml+(v-x0)/((x1-x0)||1)*pw;
+  const H=mt+rows.length*rh+6;
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Peso antes e depois de cada animal"><g class="grid">`;
+  t.forEach(v=>s+=`<line x1="${X(v)}" x2="${X(v)}" y1="${mt-6}" y2="${H-4}"/><text x="${X(v)}" y="${mt-11}" text-anchor="middle">${fmt(v,0)}</text>`);
+  s+="</g>";
+  rows.forEach((r,i)=>{const y=mt+i*rh+rh/2,ok=isFinite(r.b);
+    if(r.sep)s+=`<line x1="0" x2="${W}" y1="${mt+i*rh}" y2="${mt+i*rh}" stroke="var(--line-2)" stroke-dasharray="2 4"/>`;
+    s+=`<text class="lbl" x="${lw}" y="${y+4}" text-anchor="end">${esc(r.label)}</text>`;
+    if(ok)s+=`<line x1="${X(r.a)}" x2="${X(r.b)}" y1="${y}" y2="${y}" stroke="${r.color}" stroke-width="2.5" stroke-linecap="round" opacity=".55"/>`;
+    if(isFinite(r.a))s+=`<circle cx="${X(r.a)}" cy="${y}" r="5" fill="var(--surface)" stroke="${r.color}" stroke-width="2.2"/>`;
+    if(ok)s+=`<circle cx="${X(r.b)}" cy="${y}" r="6" fill="${r.color}" stroke="var(--surface)" stroke-width="2"/>`;
+    const d=r.b-r.a;s+=`<text class="val" x="${W-4}" y="${y+4}" text-anchor="end"${d<0?' style="fill:var(--bad)"':""}>${!ok?"—":d<0?"↓ "+fmt(d,1):"+"+fmt(d,1)}</text>`;
+    s+=`<rect x="0" y="${y-rh/2}" width="${W}" height="${rh}" fill="transparent" data-tip="${esc(r.tip)}"/>`;});
+  return s+"</svg>";
+}
 function lines(series,yl){const W=cw(false);
   const H=260,ml=50,mr=70,mt=14,mb=34,pw=W-ml-mr,ph=H-mt-mb;
   const all=series.flatMap(s=>s.pts);if(!all.length)return"";
@@ -265,7 +306,7 @@ function heat(vars,M){const W=cw(true);
   vars.forEach((v,i)=>{s+=`<text class="lbl" x="${lw-8}" y="${lw-40+i*cell+cell/2+4}" text-anchor="end" style="font-size:11px">${esc(v.curto||v.nome)}</text>`;
     s+=`<text class="lbl" transform="translate(${lw+i*cell+cell/2+4} ${lw-48}) rotate(-50)" style="font-size:11px">${esc(v.curto||v.nome)}</text>`;});
   for(let i=0;i<n;i++)for(let j=0;j<n;j++){const r=M[i][j],x=lw+j*cell,y=lw-40+i*cell;
-    s+=`<rect x="${x+1}" y="${y+1}" width="${cell-2}" height="${cell-2}" rx="4" fill="${col(r.r)}" data-heat="${i},${j}" data-tip="${esc(vars[i].nome)} × ${esc(vars[j].nome)}\nr = ${fmt(r.r,2)} · p = ${fmtP(r.p)}${i!==j?` · p corrigido = ${fmtP(r.q)}`:""}" style="cursor:pointer"/>`;
+    s+=`<rect x="${x+1}" y="${y+1}" width="${cell-2}" height="${cell-2}" rx="4" fill="${col(r.r)}" data-heat="${i},${j}" data-tip="${esc(vars[i].nome)} × ${esc(vars[j].nome)}\nr = ${fmt(r.r,2)} · ${pEq(r.p)}${i!==j?` · p corrigido = ${fmtP(r.q)}`:""}" style="cursor:pointer"/>`;
     if(i!==j&&isFinite(r.r))s+=`<text x="${x+cell/2}" y="${y+cell/2+4}" text-anchor="middle" style="font-size:10.5px;font-weight:600;fill:${Math.abs(r.r)>.55?"#fff":"var(--ink)"};pointer-events:none">${fmt(r.r,1)}${r.q<.05?"*":""}</text>`;}
   return s+"</svg>";
 }
@@ -362,6 +403,7 @@ VIEWS.dash=function(){
     <div class="row"><button class="btn" data-go="setup">${icon("obs")}Nova observação</button><button class="btn ghost" data-go="peso">${icon("perf")}Lançar pesagem</button><button class="btn ghost" data-go="edit">Editar experimento</button></div>
   </section>
   ${dietaCard(e)}
+  ${pesagemCard(e)}
   <div class="grid g4" style="margin-top:16px">
     <div class="kpi"><span class="l">GMD médio do lote</span><span class="v num">${fmt(gm.length?Stats.mean(gm):NaN,2)}<small>kg/dia</small></span></div>
     <div class="kpi"><span class="l">Abaixo do esperado</span><span class="v num" style="color:${abaixo.length?"var(--bad)":"var(--good)"}">${abaixo.length}<small>de ${PA.length}</small></span></div>
@@ -387,6 +429,7 @@ VIEWS.dash=function(){
   </section>`;
   $$("[data-go]",app).forEach(b=>b.onclick=()=>{const g=b.dataset.go;go(g==="setup"?{name:"setup",sp:e.especieId}:g==="peso"?{name:"entry",kind:"peso"}:g==="edit"?{name:"expForm",id:e.id}:g==="new"?{name:"expForm"}:g==="animais"?{name:"animals"}:{name:"perf"})});
   $$("[data-act]",app).forEach(b=>b.onclick=()=>{db.active=b.dataset.act;save();render()});
+  $$("[data-pzgo]",app).forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.pzgo.split(":");go(k==="ver"?{name:"perf",to:"pz"}:k==="edit"?{name:"entry",kind:"peso",id}:{name:"entry",kind:"peso",etapa:k})});
   const cc=$("#copyCode",app);if(cc)cc.onclick=()=>{(navigator.clipboard?navigator.clipboard.writeText(e.codigo):Promise.reject()).then(()=>toast(`Código ${e.codigo} copiado. Os observadores entram em Ajustes → Entrar em um experimento.`)).catch(()=>toast(`Código: ${e.codigo}`))};
 };
 function ethogramCard(e){
@@ -434,6 +477,7 @@ VIEWS.expForm=function(){
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
     ${adCardHtml(ed)}
+    ${pesoCardHtml(ed)}
     ${ed?"":`<section class="card" data-nb id="bCard"><div class="card-h"><div><h3>Dieta de cada baia</h3><p>Toque numa baia para trocar a dieta. As que estão como “escolher” ainda não têm dieta.</p></div></div><div class="bgrid" id="bGrid"></div><p class="note" id="bSum"></p></section>`}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Observadores</h3><p>${ed.codigo?`Código do experimento: <b class="num">${esc(ed.codigo)}</b>. Cada observador cria a conta dele e entra em Ajustes → Entrar em um experimento.`:"Para trabalhar junto com outros observadores, entre na sua conta em Ajustes: depois de enviado ao banco, o experimento ganha um código de convite."}</p></div></div></section>`:""}
     ${ed?`<section class="card"><div class="card-h"><div><h3>Animais</h3><p>${ed.animais.length} cadastrado(s). O cadastro de cada animal (baia, brinco, raça, sexo, nascimento) fica na aba Animais.</p></div><button type="button" class="btn sm" id="toAn">${icon("tag")}Abrir animais</button></div></section>`:""}
@@ -489,6 +533,13 @@ VIEWS.expForm=function(){
   ["#adOn","#adIni","#adPasso","#adDias","#adAbaixo","#xIni"].forEach(id=>{const el=$(id,app);if(el)el.addEventListener(id==="#adOn"||id==="#adAbaixo"?"change":"input",()=>adOpts(id==="#adOn"))});
   $("#adVol",app).addEventListener("input",adPaint);
   $("#adGen",app).onclick=()=>adOpts(true);
+  // pesagem antes e depois: a data da inicial acompanha o início do experimento até alguém mudar à mão
+  const pzShow=()=>$$("[data-pz]",app).forEach(x=>x.hidden=$("#pzOn",app).value!=="1");pzShow();$("#pzOn",app).onchange=pzShow;
+  let pzMan=!!ed?.config?.pesagem?.ini;$("#pzIni",app).addEventListener("input",()=>{pzMan=true;pzDur()});$("#pzFim",app).addEventListener("input",pzDur);
+  wireJejum("pzJej");
+  $("#xIni",app).addEventListener("input",()=>{if(!pzMan){$("#pzIni",app).value=$("#xIni",app).value;pzDur()}});
+  function pzDur(){const a=$("#pzIni",app).value,b=$("#pzFim",app).value,n=a&&b?dayDiff(a,b):NaN;$("#pzDur",app).textContent=!b?"pode deixar em branco e decidir depois":n>0?`${n} dias entre as duas pesagens`:"precisa ser depois da pesagem inicial"}
+  pzDur();
   // Dieta de cada baia ao criar: asg[k] = id do tratamento da baia k+1, ou null (“escolher”).
   const asg=[];
   const nbN=()=>Math.max(0,Math.min(500,Math.floor(+$("#xNB",app).value||0)));
@@ -537,7 +588,10 @@ VIEWS.expForm=function(){
       if(ruim){toast(`${g.nome}: confira as datas e as porcentagens das etapas (0 a 100%).`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
       E=Data.etapasDe({etapas:E});if(new Set(E.map(x=>x.inicio)).size<E.length){toast(`${g.nome}: duas etapas no mesmo dia.`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
       if(E.length){g.etapas=E;const F=E[E.length-1].conc;if(!g.dieta)g.dieta=`${pct(F)} concentrado / ${pct(100-F)} ${vol.toLowerCase()}`}}
-    const config={...(ed?.config||{}),especieDef:{nome:sp.nome,cientifico:sp.cientifico||"",comp:sp.comp},adapt:adOn(),ini:num("#adIni",50),passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value,analise:$("#adAn",app).value,volumoso:vol};
+    const pz={on:$("#pzOn",app).value==="1",ini:$("#pzIni",app).value,fim:$("#pzFim",app).value,jejum:readJejum("pzJej")};
+    if(pz.on&&Number.isNaN(pz.jejum)){toast("Digite as horas de jejum (de 1 a 96).");$("#pzCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
+    if(pz.on&&pz.ini&&pz.fim&&pz.fim<=pz.ini){toast("A pesagem final precisa ser depois da inicial.");$("#pzCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
+    const config={...(ed?.config||{}),pesagem:pz,especieDef:{nome:sp.nome,cientifico:sp.cientifico||"",comp:sp.comp},adapt:adOn(),ini:num("#adIni",50),passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value,analise:$("#adAn",app).value,volumoso:vol};
     const data={config,nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
     else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
@@ -570,6 +624,25 @@ function adCardHtml(ed){const c=ed?.config||{},on=ed?(c.adapt??Data.temAdaptacao
     <div class="stack" data-ad style="gap:10px"><div class="spread"><h3 style="font-size:1.05rem">Etapas de cada dieta</h3><button type="button" class="btn sm" id="adGen">${icon("refresh")}Refazer com estas opções</button></div>
       <p class="note">As dietas trocam nos mesmos dias, mas cada uma pode ter datas diferentes: é só mudar na tabela. A última etapa é a dieta final, que vale até o fim.</p>
       <div id="adBox" class="stack" style="gap:12px"></div></div></section>`}
+
+// Pesagem antes e depois do experimento (pedido do cliente): datas e jejum ficam em e.config.pesagem
+// Jejum antes de pesar, em horas: null = não informado, 0 = sem jejum. Padrão no experimento; cada pesagem guarda o seu (p.jejum).
+const JEJUM_OPC=[0,12,14,16,24];
+const jejumNome=h=>h==null||h===""||!isFinite(+h)?"":+h===0?"sem jejum":`${fmt(+h,0)} h de jejum`;
+const jejumTxt=e=>jejumNome(e.config?.pesagem?.jejum);
+function jejumCtl(id,val,label,hint,attr=""){const v=val==null||val===""||!isFinite(+val)?"":+val,outro=v!==""&&!JEJUM_OPC.includes(v),o=(x,l)=>`<option value="${x}"${String(x)===String(outro?"outro":v)?" selected":""}>${l}</option>`;
+  return`<label class="f"${attr}>${label}<span class="jj"><select id="${id}">${o("","Não informar")}${JEJUM_OPC.map(h=>o(h,h?`${h} h de jejum`:"Sem jejum")).join("")}${o("outro","Outro tempo…")}</select><input type="number" id="${id}H" min="1" max="96" step="1" inputmode="numeric" placeholder="horas" value="${outro?v:""}" aria-label="Horas de jejum"${outro?"":" hidden"}></span>${hint?`<span class="hint">${hint}</span>`:""}</label>`}
+function wireJejum(id){const s=$("#"+id,app),h=$("#"+id+"H",app);s.addEventListener("change",()=>{h.hidden=s.value!=="outro";if(!h.hidden)h.focus()})}
+// null = não informado · NaN = "outro" sem um número válido
+function readJejum(id){const s=$("#"+id,app).value;if(s==="")return null;if(s!=="outro")return +s;const v=parseFloat(String($("#"+id+"H",app).value).replace(",","."));return isFinite(v)&&v>0&&v<=96?v:NaN}
+function pesoCardHtml(ed){const c=ed?.config?.pesagem||{},on=ed?(c.on??ed.pesagens.length>0):true,o=(v,l,s)=>`<option value="${v}"${v===s?" selected":""}>${l}</option>`;
+  return`<section class="card" id="pzCard"><div class="card-h"><div><h3>Pesagem antes e depois</h3><p>Pesar todos os animais no começo e no fim do experimento. O app compara os dois pesos de cada animal e de cada dieta (Desempenho → Peso antes e depois). Pesagens no meio do caminho também podem ser lançadas.</p></div></div>
+    <div class="fields">
+      <label class="f">Pesar antes e depois?<select id="pzOn">${o("1","Sim",on?"1":"0")}${o("0","Não",on?"1":"0")}</select></label>
+      <label class="f" data-pz>Pesagem inicial<input type="date" id="pzIni" value="${esc(c.ini||ed?.inicio||isoDay(new Date()))}"><span class="hint">em geral, no dia em que começa</span></label>
+      <label class="f" data-pz>Pesagem final <span class="hint">prevista</span><input type="date" id="pzFim" value="${esc(c.fim||"")}"><span class="hint" id="pzDur"></span></label>
+      ${jejumCtl("pzJej",c.jejum,"Jejum padrão antes de pesar","cada pesagem pode ter o seu; o ideal é o mesmo no começo e no fim"," data-pz")}
+    </div></section>`}
 
 /* ================= ANIMAIS (cadastro) ================= */
 const RACAS={cabra:["Boer","Saanen","Anglo-Nubiana","Alpina","Savana","Toggenburg","Sem raça definida"],vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
@@ -840,8 +913,8 @@ VIEWS.perf=function(){
   const e=exp();if(!e){app.innerHTML=pageHead("Desempenho","Desempenho dos animais")+needExp();return wireNeedExp()}
   const P=performance(e);const ord={abaixo:0,ok:1,acima:2,sem:3,saiu:4};
   const sorted=[...P].sort((x,y)=>ord[x.status]-ord[y.status]||(x.ratio||0)-(y.ratio||0));
-  const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
-  const series=e.grupos.map((g,i)=>({name:g.nome,color:gc(e,g),pts:pes.map(p=>{const v=ativos(e).filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
+  const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1),jg=jejumGMD(e),usa=new Set(Data.pesagensUsadas(e,jg));
+  const series=e.grupos.map((g,i)=>({name:g.nome,color:gc(e,g),pts:pes.filter(p=>usa.has(p)).map(p=>{const v=ativos(e).filter(a=>a.grupoId===g.id).map(a=>+p.pesos[a.id]).filter(isFinite);return v.length?{x:dayDiff(e.inicio,p.data),y:Stats.mean(v)}:null}).filter(Boolean)})).filter(s=>s.pts.length);
   app.innerHTML=pageHead("Desempenho","O lote está rendendo o esperado?","GMD = inclinação da reta do peso ao longo dos dias, usando todas as pesagens (com só duas, é (peso atual − peso inicial) ÷ dias). Conversão alimentar = consumo de matéria seca ÷ GMD. Status comparado à meta de GMD de cada tratamento: abaixo de 90% é alerta.",`<button class="btn primary" id="lp">${icon("plus")}Lançar pesagem</button><button class="btn" id="lc">${icon("plus")}Lançar consumo</button><button class="btn quiet" id="ex">${icon("down")}Exportar</button>`)+`
   <div class="stack-lg">
   <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th class="r">Peso inicial</th><th class="r">Peso atual</th><th class="r">Dias</th><th class="r">GMD</th><th class="r">Meta</th><th>Status</th><th class="r">CMS</th><th class="r">CMS %PV</th><th class="r">CA</th></tr></thead><tbody>
@@ -855,34 +928,95 @@ VIEWS.perf=function(){
     <section class="card"><div class="card-h"><div><h3>Evolução do peso médio</h3><p>Média de cada tratamento em cada pesagem (kg).</p></div></div>
       ${series.length?`<div class="viz">${lines(series,"kg")}</div><div class="legend">${series.map(s=>`<span><i class="dot" style="background:${s.color}"></i>${esc(s.name)}</span>`).join("")}</div>`:`<p class="muted">Sem pesagens ainda.</p>`}</section>
   </div>
+  ${antesDepoisCard(e)}
   <section class="grid g2">
-    <div class="stack"><h3>Pesagens</h3><div class="list">${pes.length?pes.map(p=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(p.data))} <span class="muted" style="font-weight:500">· dia ${dayDiff(e.inicio,p.data)}</span></div><div class="sub">${Object.values(p.pesos).filter(isFinite).length} animais pesados</div></div><button class="btn sm" data-ed="peso:${p.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhuma pesagem.</div>`}</div></div>
+    <div class="stack"><h3>Pesagens</h3><div class="list">${pes.length?pes.map(p=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(p.data))} <span class="muted" style="font-weight:500">· dia ${dayDiff(e.inicio,p.data)}</span></div><div class="sub">${Object.values(p.pesos).filter(isFinite).length} animais pesados${jejumNome(p.jejum)?` · ${jejumNome(p.jejum)}`:""}${usa.has(p)?"":` · <span class="tag">fora do GMD</span>`}</div></div><button class="btn sm" data-ed="peso:${p.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhuma pesagem.</div>`}</div></div>
     <div class="stack"><h3>Consumo</h3><div class="list">${e.consumo.length?[...e.consumo].sort((a,b)=>a.data<b.data?-1:1).map(c=>`<div class="item"><div class="grow"><div class="title">${dmy(parseDay(c.data))}</div><div class="sub">Média ${fmt(Stats.mean(Object.values(c.valores).filter(isFinite)),1)} kg MS/dia</div></div><button class="btn sm" data-ed="consumo:${c.id}">Editar</button></div>`).join(""):`<div class="empty">Nenhum registro de consumo.</div>`}</div></div>
   </section></div>`;
   $("#lp",app).onclick=()=>go({name:"entry",kind:"peso"});$("#lc",app).onclick=()=>go({name:"entry",kind:"consumo"});
-  wireAnalise(e);
+  wireAnalise(e);wireAntesDepois(e);
+  if(view.to==="pz"){view.to=null;const c=$("#pzAD",app);if(c)requestAnimationFrame(()=>c.scrollIntoView({block:"start"}))}
   $("#ex",app).onclick=()=>{const D=dataset(e);saveFile(`${e.nome} - desempenho.csv`,toCSV([[rot(e),"Tratamento","Peso inicial","Peso atual","Dias","GMD","Meta GMD","Status","CMS","CMS %PV","CA","Situação","Período analisado"],...P.map(p=>[idOf(e,p),p.grupo,p.p0,p.pf,p.dias,p.gmd,p.meta,{acima:"Acima",ok:"No esperado",abaixo:"Abaixo",sem:"Sem dados",saiu:"Saiu"}[p.status],p.cms,p.pv,p.ca,p.saida?`Saiu em ${dmy(parseDay(p.saida.data))} (${p.saida.motivo})`:"Ativo",p.desde?`Dieta final (desde ${dmy(parseDay(p.desde))})`:"Todo"])]))};
   $$("[data-ed]",app).forEach(b=>b.onclick=()=>{const[k,id]=b.dataset.ed.split(":");go({name:"entry",kind:k,id})});
 };
+// Desempenho: peso antes e depois (primeira × última pesagem de cada animal, período todo)
+function antesDepoisCard(e){const R=Data.antesDepois(e,{jejum:jejumGMD(e)}),nFora=jejumGMD(e)!=null?Data.pesagensFora(e,jejumGMD(e)).length:0,cols=e.grupos.map(g=>gc(e,g));
+  const head=`<div class="card-h"><div><h3>Peso antes e depois</h3><p>Primeira e última pesagem de cada animal, do começo ao fim do experimento${Data.temAdaptacao(e)?" (com a adaptação)":""}.</p></div>${R.completos?`<button class="btn sm quiet" id="exAD">${icon("down")}Exportar</button>`:""}</div>`;
+  if(R.completos<2)return`<section class="card" id="pzAD">${head}<div class="callout">${icon("clock")}<span>${R.comInicial?`A pesagem inicial já tem ${R.comInicial} animal(is). Falta a pesagem final (ou outra pesagem depois da inicial) para comparar.`:"Lance a pesagem inicial e, no fim do experimento, a pesagem final."}${nFora?` ${nFora} pesagem(ns) com outro jejum estão fora da conta (veja Jejum nas pesagens, acima).`:""}</span></div>
+    ${R.comInicial?"":`<div class="row"><button class="btn primary" data-adgo="inicial">${icon("plus")}Lançar pesagem inicial</button></div>`}</section>`;
+  const G=R.grupos.filter(g=>g.n);const kg=v=>fmt(v,1)+" kg",sg=v=>(v>0?"+":v<0?"−":"")+fmt(Math.abs(v),1);
+  const frase=g=>{const t=g.teste,sig=t.p<.05,up=g.ganho>=0;
+    return`<div class="verdict${sig&&up?" sig":""}"><b>${esc(g.nome)}</b>: de ${kg(g.p0)} para ${kg(g.pf)} em média (${sg(g.ganho)} kg, ${sg(g.pct)}%) em ${fmt(g.dias,0)} dias. `+
+      (g.n<2?"Só 1 animal com as duas pesagens: não dá para testar.":sig?`A ${up?"diferença":"perda"} é <b>estatisticamente significativa</b> (teste t pareado, ${pEq(t.p)}).`:`<b>Não é significativa</b> (teste t pareado, ${pEq(t.p)}): com esses animais, pode ser acaso.`)+"</div>"};
+  const ini=R.inicial,ga=R.ganho,best=ga.desc.length?[...ga.desc].sort((a,b)=>b.media-a.media)[0]:null;
+  const cmp=G.length<2?"":`<div class="stack" style="gap:10px"><h3 style="font-size:1.05rem">Entre os tratamentos</h3>
+    <div class="verdict">${!isFinite(ini.p)?"Sem animais suficientes para comparar o peso inicial dos tratamentos.":ini.p<.05?`${icon("alert")} Os tratamentos <b>já começaram com peso diferente</b> (ANOVA do peso inicial, ${pEq(ini.p)}). Na análise final, use o peso inicial como covariável (ANCOVA) no SAS ou no R.`:`Os tratamentos <b>começaram com peso parecido</b> (ANOVA do peso inicial, ${pEq(ini.p)}): a comparação entre eles é justa.`}</div>
+    ${isFinite(ga.p)?`<div class="verdict${ga.p<.05?" sig":""}">${ga.p<.05?`O ganho total <b>difere</b> entre os tratamentos (ANOVA, ${pEq(ga.p)}). Maior ganho: <b>${esc(best.nome)}</b>, ${sg(best.media)} kg.`:`<b>Não houve diferença significativa</b> no ganho total entre os tratamentos (ANOVA, ${pEq(ga.p)}).`}${ga.pares&&ga.pares.length>1?" Comparação par a par em Estatística → Ganho total no experimento.":""}</div>`:""}</div>`;
+  const ord=[...R.rows].filter(r=>isFinite(r.p0)).sort((a,b)=>gIndex(e,a.grupoId)-gIndex(e,b.grupoId)||String(a.ident).localeCompare(String(b.ident),undefined,{numeric:true}));
+  const dumb=ord.map((r,i)=>({label:shortName(e,r)+(r.saida?" ×":""),a:r.p0,b:r.pf,color:gColor(e,r.grupoId),sep:i>0&&ord[i-1].grupoId!==r.grupoId,
+    tip:`${aName(e,r)} · ${r.grupo}${r.saida?` · saiu (${r.saida.motivo})`:""}\nAntes: ${kg(r.p0)} (${dmy(parseDay(r.d0))})\n${isFinite(r.pf)?`Depois: ${kg(r.pf)} (${dmy(parseDay(r.d1))})\nGanho: ${sg(r.ganho)} kg (${sg(r.pct)}%) em ${r.dias} dias`:"Sem pesagem final"}`}));
+  const semF=G.reduce((s,g)=>s+g.semFinal,0);
+  // jejum: as duas pesagens nas mesmas condições?
+  const C=R.rows.filter(r=>!r.saida&&isFinite(r.ganho)),js=k=>[...new Set(C.map(r=>r[k]))],j0=js("j0"),j1=js("j1");
+  const jtxt=h=>h==null?"não informado":jejumNome(h);
+  const jejumInfo=R.jejumDif?`<div class="callout warn">${icon("alert")}<span><b>Jejum diferente no começo e no fim</b> em ${R.jejumDif} animal(is) (${R.jejuns.map(x=>x.split("→").map(h=>jtxt(+h)).join(" → ")).join("; ")}). O que está no estômago e no intestino muda o peso: o ganho pode parecer maior ou menor do que foi. Para comparar, pese nas mesmas condições.</span></div>`
+    :j0.length===1&&j1.length===1&&j0[0]!=null&&j0[0]===j1[0]?`<p class="note">Inicial e final com ${jejumNome(j0[0])}: mesma condição nas duas pesagens.</p>`
+    :j0.concat(j1).includes(null)?`<p class="note">Jejum não informado em alguma das pesagens (dá para informar em Editar, na lista de pesagens).</p>`:"";
+  const PJ=Data.perdaJejum(e),PG=PJ?PJ.grupos.filter(g=>g.n):[];
+  const perda=!PJ||!PJ.rows.length?"":`<div class="stack" style="gap:10px"><h3 style="font-size:1.05rem">Perda de peso no jejum</h3>
+    <p class="note">Pesagens de ${dmy(parseDay(PJ.cheio.data))} (${jejumNome(PJ.horas[0])}) e ${dmy(parseDay(PJ.jejum.data))} (${jejumNome(PJ.horas[1])}). Mostra quanto do peso era comida e água no trato digestivo.</p>
+    <div class="tablebox"><table class="t"><thead><tr><th>Tratamento</th><th class="r">n</th><th class="r">Perda (kg)</th><th class="r">Perda (%)</th><th class="r">DP (%)</th></tr></thead><tbody>
+    ${PG.map(g=>`<tr><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,g.id)}"></i>${esc(g.nome)}</span></td><td class="r num">${g.n}</td><td class="r num">${fmt(g.kg,1)}</td><td class="r num"><b>${fmt(g.pct,1)}%</b></td><td class="r num">${fmt(g.dp,1)}</td></tr>`).join("")}</tbody></table></div>
+    ${PG.length>1&&isFinite(PJ.anova.p)?`<div class="verdict${PJ.anova.p<.05?" sig":""}">${PJ.anova.p<.05?`A perda no jejum <b>difere</b> entre os tratamentos (ANOVA, ${pEq(PJ.anova.p)}): o enchimento do trato não é igual nas dietas.`:`A perda no jejum <b>não difere</b> entre os tratamentos (ANOVA, ${pEq(PJ.anova.p)}).`}</div>`:""}</div>`;
+  return`<section class="card" id="pzAD">${head}<div class="stack">
+    ${G.map(frase).join("")}
+    <div class="tablebox"><table class="t"><thead><tr><th>Tratamento</th><th class="r">n</th><th class="r">Peso inicial</th><th class="r">Peso final</th><th class="r">Ganho total</th><th class="r">DP</th><th class="r">Ganho %</th><th class="r">Dias</th><th class="r">p (t pareado)</th></tr></thead><tbody>
+    ${G.map(g=>`<tr><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,g.id)}"></i>${esc(g.nome)}</span></td><td class="r num">${g.n}</td><td class="r num">${fmt(g.p0,1)}</td><td class="r num">${fmt(g.pf,1)}</td><td class="r num"><b>${sg(g.ganho)}</b></td><td class="r num">${fmt(g.dpGanho,1)}</td><td class="r num">${sg(g.pct)}%</td><td class="r num">${fmt(g.dias,0)}</td><td class="r num">${fmtP(g.teste.p)}${g.teste.p<.05?" *":""}</td></tr>`).join("")}
+    </tbody></table></div>
+    <p class="note" style="margin-top:-6px">Pesos em kg (média do tratamento) · DP = desvio-padrão do ganho · * p &lt; 0,05.${semF?` ${semF} animal(is) ainda sem pesagem final.`:""}${R.saidas?` Quem saiu do experimento (×) aparece no gráfico, mas fica fora das médias e dos testes.`:""}</p>
+    ${jejumInfo}
+    ${cmp}
+    ${perda}
+    <div class="stack" style="gap:8px"><h3 style="font-size:1.05rem">Cada animal</h3>
+      <div class="viz">${dumbbell(dumb)}</div>
+      <div class="legend">${e.grupos.map(g=>`<span><i class="dot" style="background:${gc(e,g)}"></i>${esc(g.nome)}</span>`).join("")}<span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="none" stroke="var(--ink-2)" stroke-width="2"/></svg>Antes</span><span><svg width="14" height="14"><circle cx="7" cy="7" r="5.5" fill="var(--ink-2)"/></svg>Depois</span></div></div>
+  </div></section>`}
+function wireAntesDepois(e){const b=$("[data-adgo]",app);if(b)b.onclick=()=>go({name:"entry",kind:"peso",etapa:b.dataset.adgo});
+  const x=$("#exAD",app);if(!x)return;
+  x.onclick=()=>{const R=Data.antesDepois(e,{jejum:jejumGMD(e)});saveFile(`${e.nome} - peso antes e depois.csv`,toCSV([[rot(e),"Tratamento","Data inicial","Peso inicial","Data final","Peso final","Dias","Ganho total","Ganho %","GMD (inicial a final)","Jejum inicial (h)","Jejum final (h)","Situação"],
+    ...R.rows.map(r=>[idOf(e,r),r.grupo,r.d0?dmy(parseDay(r.d0)):"",r.p0,r.d1?dmy(parseDay(r.d1)):"",r.pf,r.dias,r.ganho,r.pct,r.gmd,r.j0??"",r.d1?r.j1??"":"",r.saida?`Saiu em ${dmy(parseDay(r.saida.data))} (${r.saida.motivo})`:"Ativo"])]))}}
 VIEWS.entry=function(){
   const e=exp();if(!e)return go({name:"perf"});const peso=view.kind==="peso";
   const list=peso?e.pesagens:e.consumo,ed=view.id?list.find(x=>x.id===view.id):null,vals=ed?(peso?ed.pesos:ed.valores):{};
-  app.innerHTML=pageHead(peso?"Pesagem":"Consumo",peso?(ed?"Editar pesagem":"Lançar pesagem"):(ed?"Editar consumo":"Lançar consumo"),peso?"Peso vivo de cada animal, em kg. Deixe em branco quem não foi pesado.":"Consumo médio de matéria seca por animal no período, em kg MS/dia (ofertado − sobras, corrigido pela MS).",null,"Desempenho")+`
-  <form id="f" class="stack-lg"><div class="card"><div class="fields"><label class="f">Data<input type="date" id="d" value="${ed?.data||isoDay(new Date())}" required></label></div></div>
+  const pz=e.config?.pesagem||{},et=peso&&!ed?view.etapa:null,hoje=isoDay(new Date());
+  const d0=ed?.data||(et==="inicial"&&pz.ini?pz.ini:et==="final"&&pz.fim&&pz.fim<=hoje?pz.fim:hoje);
+  const tit=et==="inicial"?"Pesagem inicial":et==="final"?"Pesagem final":peso?(ed?"Editar pesagem":"Lançar pesagem"):(ed?"Editar consumo":"Lançar consumo");
+  app.innerHTML=pageHead(peso?"Pesagem":"Consumo",tit,peso?"Peso vivo de cada animal, em kg. Deixe em branco quem não foi pesado.":"Consumo médio de matéria seca por animal no período, em kg MS/dia (ofertado − sobras, corrigido pela MS).",null,"Desempenho")+`
+  <form id="f" class="stack-lg"><div class="card"><div class="fields"><label class="f">Data<input type="date" id="d" value="${d0}" required></label>${peso?jejumCtl("jj",ed?ed.jejum:pz.jejum,"Jejum antes desta pesagem",pz.jejum!=null&&!ed?"veio do padrão do experimento":"de sólidos (comida); água à vontade"):""}</div></div>
   <div class="tablebox"><table class="t"><thead><tr><th>${rot(e)}</th><th>Tratamento</th><th>${peso?"Peso (kg)":"CMS (kg/dia)"}</th></tr></thead><tbody>
-  ${sortAnimals(e).filter(a=>ativo(a)||vals[a.id]!=null).map(a=>`<tr><td><b>${esc(shortName(e,a))}</b>${ativo(a)?"":` <span class="muted">(saiu)</span>`}</td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} · ${esc(aName(e,a))}"></td></tr>`).join("")}
+  ${sortAnimals(e).filter(a=>ativo(a)||vals[a.id]!=null).map(a=>`<tr><td><b>${esc(shortName(e,a))}</b>${ativo(a)?"":` <span class="muted">(saiu)</span>`}</td><td><span class="row" style="gap:7px;flex-wrap:nowrap"><i class="dot" style="background:${gColor(e,a.grupoId)}"></i>${esc(grupo(e,a.grupoId)?.nome||"")}</span></td><td><input type="number" inputmode="decimal" step="0.1" min="0" id="v${a.id}" data-a="${a.id}" value="${vals[a.id]??""}" aria-label="${peso?"Peso":"Consumo"} · ${esc(aName(e,a))}">${peso?`<span class="prev num" data-prev="${a.id}"></span>`:""}</td></tr>`).join("")}
   </tbody></table></div>
   <div class="row"><button class="btn primary" type="submit">Salvar</button>${ed?`<button type="button" class="btn quiet danger" id="del">Apagar este lançamento</button>`:""}</div></form>`;
   wireBack({name:"perf"});
+  // peso da pesagem anterior (antes da data escolhida) e a diferença enquanto digita: ajuda a pegar erro de digitação
+  if(peso)wireJejum("jj");
+  if(peso){const prevOf=(aid,dia)=>{const p=e.pesagens.filter(x=>x!==ed&&x.data<dia&&isFinite(x.pesos[aid])).sort((a,b)=>a.data<b.data?1:-1)[0];return p?{w:+p.pesos[aid],d:p.data}:null};
+    // embaixo do campo: "antes 301,0 · +40,0" (data da anterior no title) (a diferença aparece enquanto digita; perda em vermelho)
+    const dif=i=>{const el=$(`[data-prev="${i.dataset.a}"]`,app),pv=prevOf(i.dataset.a,$("#d",app).value),v=parseFloat(String(i.value).replace(",","."));
+      if(!pv){el.textContent="";return}const x=v-pv.w;
+      el.title=`Pesagem anterior: ${dmy(parseDay(pv.d))}`;el.innerHTML=`antes ${fmt(pv.w,1)}${isFinite(v)?` · <b data-dif${x<0?' class="neg"':""}>${x>0?"+":x<0?"−":""}${fmt(Math.abs(x),1)}</b>`:""}`};
+    const paint=()=>$$("input[data-a]",app).forEach(dif);
+    paint();$("#d",app).addEventListener("input",paint);$("#f",app).addEventListener("input",ev=>{if(ev.target.dataset.a)dif(ev.target)})}
   if(ed)$("#del",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar exclusão?";return}const i=list.indexOf(ed);list.splice(i,1);save();toast("Lançamento apagado");go({name:"perf"})};
   $("#f",app).onsubmit=ev=>{ev.preventDefault();const o={};$$("input[data-a]",app).forEach(i=>{const v=parseFloat(String(i.value).replace(",","."));if(isFinite(v))o[i.dataset.a]=v});
     if(!Object.keys(o).length){toast("Preencha pelo menos um animal");return}
-    const rec=ed||{id:uid()};rec.data=$("#d",app).value;if(peso)rec.pesos=o;else rec.valores=o;if(!ed)list.push(rec);save();toast("Salvo");go({name:"perf"})};
+    const jj=peso?readJejum("jj"):null;if(Number.isNaN(jj)){toast("Digite as horas de jejum (de 1 a 96).");return}
+    const rec=ed||{id:uid()};rec.data=$("#d",app).value;if(peso){rec.pesos=o;if(jj==null)delete rec.jejum;else rec.jejum=jj}else rec.valores=o;if(!ed)list.push(rec);save();toast("Salvo");go(et==="final"?{name:"perf",to:"pz"}:{name:"perf"})};
 };
 
 /* ================= ESTATÍSTICA ================= */
 let statState={v:null,x:null,y:null};
-function corrWords(r,p){const a=Math.abs(r);const f=a<.3?"fraca":a<.6?"moderada":"forte";return`Correlação <b>${f} e ${r>0?"positiva":"negativa"}</b> (r = ${fmt(r,2)}). `+(p<.05?`Ela é <b>estatisticamente significativa</b> (p = ${fmtP(p)}): é pouco provável que seja acaso.`:`<b>Não é significativa</b> (p = ${fmtP(p)}): com esses dados, pode ser acaso.`)}
+function corrWords(r,p){const a=Math.abs(r);const f=a<.3?"fraca":a<.6?"moderada":"forte";return`Correlação <b>${f} e ${r>0?"positiva":"negativa"}</b> (r = ${fmt(r,2)}). `+(p<.05?`Ela é <b>estatisticamente significativa</b> (${pEq(p)}): é pouco provável que seja acaso.`:`<b>Não é significativa</b> (${pEq(p)}): com esses dados, pode ser acaso.`)}
 VIEWS.stats=function(){
   const e=exp();if(!e){app.innerHTML=pageHead("Estatística","Análise estatística")+needExp();return wireNeedExp()}
   const D=dataset(e);
@@ -918,7 +1052,7 @@ VIEWS.stats=function(){
     const unit=(v.nome.match(/\(([^)]+)\)/)||[])[1]||"";const best=[...res.desc].sort((a,b)=>b.media-a.media)[0];
     const sig=res.p<.05;
     $("#anovaOut",app).innerHTML=res.desc.length<2?`<p class="muted">Precisa de pelo menos 2 tratamentos com dados.</p>`:`
-      <div class="verdict${sig?" sig":""}">${sig?`Os tratamentos <b>diferem</b> em ${esc(v.nome)} (p = ${fmtP(res.p)}). Maior média: <b>${esc(best.nome)}</b>, ${fmt(best.media,2)} ${esc(unit)}.`:`<b>Não houve diferença significativa</b> entre os tratamentos em ${esc(v.nome)} (p = ${fmtP(res.p)}).${res.N<30?` Com ${res.N} animais, isso não prova que os tratamentos são iguais: diferenças pequenas podem passar despercebidas.`:""}`}</div>
+      <div class="verdict${sig?" sig":""}">${sig?`Os tratamentos <b>diferem</b> em ${esc(v.nome)} (${pEq(res.p)}). Maior média: <b>${esc(best.nome)}</b>, ${fmt(best.media,2)} ${esc(unit)}.`:`<b>Não houve diferença significativa</b> entre os tratamentos em ${esc(v.nome)} (${pEq(res.p)}).${res.N<30?` Com ${res.N} animais, isso não prova que os tratamentos são iguais: diferenças pequenas podem passar despercebidas.`:""}`}</div>
       <div class="statline"><div><b>${fmt(res.F,2)}</b><span>F</span></div><div><b>${res.dfb}; ${res.dfw}</b><span>gl</span></div><div><b>${fmtP(res.p)}</b><span>p</span></div><div><b>${fmt(res.cv,1)}%</b><span>CV</span></div></div>
       <div class="viz">${meanBars(res.desc.map(d=>({...d,nome:d.nome})),res.desc.map(d=>cols[e.grupos.findIndex(g=>g.nome===d.nome)]),unit)}</div>
       <div class="tablebox"><table class="t"><thead><tr><th>Tratamento</th><th class="r">n</th><th class="r">Média</th><th class="r">Desvio-padrão</th><th class="r">Erro-padrão</th></tr></thead><tbody>${res.desc.map(d=>`<tr><td>${esc(d.nome)}</td><td class="r num">${d.n}</td><td class="r num">${fmt(d.media,2)}</td><td class="r num">${fmt(d.dp,2)}</td><td class="r num">${fmt(d.ep,2)}</td></tr>`).join("")}</tbody></table></div>
@@ -1150,7 +1284,7 @@ function ptErr(e){const m=String(e&&(e.message||e)||"");
     [/for security purposes|rate limit|too many/i,"Muitas tentativas seguidas. Espere um minuto e tente de novo."],[/unable to validate email|invalid email/i,"E-mail inválido."],
     [/fetch|network|load failed/i,"Sem internet. Tente de novo quando tiver sinal."],[/código não encontrado/i,"Código não encontrado. Confira com o responsável."],
     [/row-level security|permission denied/i,"Sem permissão para essa alteração."],
-    [/could not find the .(config|etapas). column|schema cache/i,"O banco precisa ser atualizado para a fase de adaptação: rode de novo o supabase/schema.sql no SQL Editor."],
+    [/could not find the .(config|etapas|jejum). column|schema cache/i,"O banco precisa ser atualizado (fase de adaptação, jejum das pesagens): rode de novo o supabase/schema.sql no SQL Editor."],
     [/EMAIL_SEM_ACESSO|database error saving new user/i,"Este e-mail não tem acesso ao Etograma. Peça ao administrador para incluir você na lista."]];
   for(const[r,t]of map)if(r.test(m))return t;return m||"Algo deu errado."}
 

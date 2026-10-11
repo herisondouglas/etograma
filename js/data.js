@@ -56,6 +56,11 @@ const Data=(function(){
     return (ref.getFullYear()-d.getFullYear())*12+(ref.getMonth()-d.getMonth())-(ref.getDate()<d.getDate()?1:0)}
 
   /* ---------- desempenho ---------- */
+  // Jejum antes da pesagem, em horas (0 = sem jejum; null = não informado). Fica em cada pesagem (p.jejum).
+  const jejumDe=p=>p&&p.jejum!=null&&p.jejum!==""&&isFinite(+p.jejum)?+p.jejum:null;
+  // jejum (número): só as pesagens com esse jejum entram (as sem jejum informado também). undefined = todas.
+  const pesagensUsadas=(e,jejum)=>(e.pesagens||[]).filter(p=>jejum==null||jejumDe(p)==null||jejumDe(p)===+jejum);
+  const pesagensFora=(e,jejum)=>jejum==null?[]:(e.pesagens||[]).filter(p=>jejumDe(p)!=null&&jejumDe(p)!==+jejum);
   // GMD = inclinação da reta peso × dias (mínimos quadrados). Com 2 pesagens é igual a (final − inicial) ÷ dias.
   function gmdOf(pts,d0){
     const P=pts.map(p=>({x:dayDiff(d0,p.d),y:p.w}));const mx=S.mean(P.map(p=>p.x)),my=S.mean(P.map(p=>p.y));
@@ -63,8 +68,8 @@ const Data=(function(){
     return sxx>0?sxy/sxx:NaN;
   }
   // soFinal: deixa de fora a fase de adaptação (pesagens e consumo antes da dieta final do tratamento)
-  function performance(e,{soFinal=false}={}){
-    const pes=[...e.pesagens].sort((a,b)=>a.data<b.data?-1:1);
+  function performance(e,{soFinal=false,jejum}={}){
+    const pes=[...pesagensUsadas(e,jejum)].sort((a,b)=>a.data<b.data?-1:1);
     return e.animais.map(a=>{const desde=corte(e,a,soFinal);
       const pts=pes.filter(p=>isFinite(p.pesos[a.id])&&(!desde||p.data>=desde)).map(p=>({d:p.data,w:+p.pesos[a.id]}));
       const g=grupo(e,a.grupoId)||{};const o={desde,id:a.id,ident:ident(e,a),brinco:a.brinco,baia:a.baia,grupoId:a.grupoId,grupo:g.nome||"—",meta:+g.gmdMeta,pts};
@@ -76,6 +81,43 @@ const Data=(function(){
       if(isFinite(o.gmd)&&o.meta>0){o.ratio=o.gmd/o.meta;o.status=o.ratio>=1.1?"acima":o.ratio>=.9?"ok":"abaixo"}else o.status="sem";
       if(a.saida){o.saida=a.saida;o.status="saiu"}
       return o;});
+  }
+
+  /* ---------- peso antes e depois ----------
+     Antes = primeira pesagem do animal no experimento; depois = a última. Sempre o período todo (com a adaptação),
+     porque a pergunta é quanto o animal mudou do começo ao fim. Quem saiu aparece nas linhas, mas fica fora das médias e testes. */
+  function antesDepois(e,{jejum}={}){
+    const pes=[...pesagensUsadas(e,jejum)].sort((a,b)=>a.data<b.data?-1:1);
+    const rows=e.animais.map(a=>{const pts=pes.filter(p=>isFinite(p.pesos[a.id])).map(p=>({d:p.data,w:+p.pesos[a.id],j:jejumDe(p)}));
+      const g=grupo(e,a.grupoId)||{};const o={id:a.id,ident:ident(e,a),brinco:a.brinco,baia:a.baia,grupoId:a.grupoId,grupo:g.nome||"—",n:pts.length,saida:a.saida||null};
+      if(pts.length){o.d0=pts[0].d;o.p0=pts[0].w;o.j0=pts[0].j}
+      if(pts.length>=2&&pts[pts.length-1].d>pts[0].d){const L=pts[pts.length-1];o.d1=L.d;o.pf=L.w;o.j1=L.j;o.dias=dayDiff(o.d0,o.d1);o.ganho=o.pf-o.p0;o.pct=o.p0>0?100*o.ganho/o.p0:NaN;o.gmd=o.ganho/o.dias}
+      return o});
+    const A=rows.filter(r=>!r.saida);
+    const grupos=e.grupos.map(g=>{const R=A.filter(r=>r.grupoId===g.id),C=R.filter(r=>isFinite(r.ganho));
+      const m=k=>C.length?S.mean(C.map(r=>r[k])):NaN;
+      return{id:g.id,nome:g.nome,n:C.length,semFinal:R.filter(r=>isFinite(r.p0)&&!isFinite(r.ganho)).length,p0:m("p0"),pf:m("pf"),ganho:m("ganho"),dpGanho:S.sd(C.map(r=>r.ganho)),pct:m("pct"),dias:m("dias"),
+        teste:S.pairedT(C.map(r=>r.p0),C.map(r=>r.pf))}});
+    // os grupos começaram parecidos? (todos com peso inicial, mesmo sem a pesagem final) · e ganharam diferente?
+    const inicial=S.anova(e.grupos.map(g=>({nome:g.nome,vals:A.filter(r=>r.grupoId===g.id).map(r=>r.p0)})));
+    const ganho=S.anova(e.grupos.map(g=>({nome:g.nome,vals:A.filter(r=>r.grupoId===g.id).map(r=>r.ganho)})));
+    // inicial e final com jejum diferente (as duas informadas): o enchimento do trato muda o peso
+    const jejumDif=A.filter(r=>isFinite(r.ganho)&&r.j0!=null&&r.j1!=null&&r.j0!==r.j1);
+    return{rows,grupos,inicial,ganho,jejumDif:jejumDif.length,jejuns:[...new Set(jejumDif.map(r=>r.j0+"→"+r.j1))],completos:A.filter(r=>isFinite(r.ganho)).length,comInicial:A.filter(r=>isFinite(r.p0)).length,ativos:A.length,saidas:rows.length-A.length};
+  }
+
+  /* ---------- perda de peso no jejum ----------
+     Duas pesagens com até 2 dias de diferença e jejum diferente (ex.: cheio no dia 84, 16 h de jejum no dia 85).
+     Perda (%) = (peso com menos jejum − peso com mais jejum) ÷ peso com menos jejum × 100. Usa o par mais recente. */
+  function perdaJejum(e){
+    const pes=[...e.pesagens].filter(p=>jejumDe(p)!=null).sort((a,b)=>a.data<b.data?-1:1);let par=null;
+    for(let i=0;i<pes.length;i++)for(let k=i+1;k<pes.length;k++){const a=pes[i],b=pes[k];
+      if(dayDiff(a.data,b.data)<=2&&jejumDe(a)!==jejumDe(b))par=jejumDe(a)<jejumDe(b)?[a,b]:[b,a]}
+    if(!par)return null;const[cheio,jej]=par;
+    const rows=e.animais.filter(ativo).map(a=>{const w0=+cheio.pesos[a.id],w1=+jej.pesos[a.id];
+      return{id:a.id,ident:ident(e,a),grupoId:a.grupoId,grupo:(grupo(e,a.grupoId)||{}).nome||"—",cheio:w0,jejum:w1,kg:w0-w1,pct:w0>0?100*(w0-w1)/w0:NaN}}).filter(r=>isFinite(r.kg));
+    const grupos=e.grupos.map(g=>{const v=rows.filter(r=>r.grupoId===g.id);return{id:g.id,nome:g.nome,n:v.length,kg:v.length?S.mean(v.map(r=>r.kg)):NaN,pct:v.length?S.mean(v.map(r=>r.pct)):NaN,dp:S.sd(v.map(r=>r.pct))}});
+    return{cheio,jejum:jej,horas:[jejumDe(cheio),jejumDe(jej)],rows,grupos,anova:S.anova(e.grupos.map(g=>({nome:g.nome,vals:rows.filter(r=>r.grupoId===g.id).map(r=>r.pct)})))};
   }
 
   /* ---------- comportamento ---------- */
@@ -102,10 +144,10 @@ const Data=(function(){
     return{vars,by};
   }
   function dataset(e,sessions,opt={}){
-    const P=performance(e,opt),BV=behaviorVars(e,sessions,opt);
-    const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"}];
+    const P=performance(e,opt),BV=behaviorVars(e,sessions,opt),AD=Object.fromEntries(antesDepois(e,opt).rows.map(r=>[r.id,r]));
+    const base=[{key:"p0",nome:"Peso inicial (kg)"},{key:"pf",nome:"Peso atual (kg)"},{key:"gmd",nome:"GMD (kg/dia)"},{key:"cms",nome:"Consumo de MS (kg/dia)"},{key:"ca",nome:"Conversão alimentar (kg MS/kg)"},{key:"gt",nome:"Ganho total no experimento (kg)"}];
     // quem saiu do experimento não entra na estatística
-    const rows=P.filter(p=>!p.saida).map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,...(BV.by[p.id]||{})}}));
+    const rows=P.filter(p=>!p.saida).map(p=>({id:p.id,ident:p.ident,brinco:p.brinco,baia:p.baia,grupoId:p.grupoId,grupo:p.grupo,v:{p0:p.p0,pf:p.pf,gmd:p.gmd,cms:p.cms,ca:p.ca,gt:AD[p.id]?.ganho,...(BV.by[p.id]||{})}}));
     const vars=[...base,...BV.vars].filter(v=>rows.filter(r=>isFinite(r.v[v.key])).length>=3);
     return{rows,vars,perf:P,saidas:P.length-rows.length};
   }
@@ -163,7 +205,7 @@ const Data=(function(){
     return out;
   }
 
-  return{iso,addDays,gerarEtapas,etapasDe,temAdaptacao,inicioFinal,etapaEm,uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,sessionAnimalId,behaviorVars,dataset,
+  return{iso,addDays,gerarEtapas,etapasDe,temAdaptacao,inicioFinal,etapaEm,uid,pad,hhmm,dmy,parseDay,dayDiff,norm,grupo,porBaia,ativo,ident,parseIds,migrate,ageMonths,gmdOf,performance,jejumDe,pesagensUsadas,pesagensFora,antesDepois,perdaJejum,sessionAnimalId,behaviorVars,dataset,
     nSlots,slotDate,marked,sessionSignature,toCSV,sessionCSV,parseCSV,sessionsFromCSV};
 })();
 if(typeof module!=="undefined")module.exports=Data;

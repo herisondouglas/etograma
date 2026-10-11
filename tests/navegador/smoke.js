@@ -70,7 +70,7 @@ const results = []; const check = (name, ok, info = "") => { results.push(`${ok 
   check("nova observação lista baias", /^Baia \d+/.test(await ev(`return document.querySelector(".checks .check span").textContent`)));
 
   // desempenho e estatística continuam calculando
-  await tab("desempenho"); check("tabela de desempenho", (await ev(`return document.querySelectorAll(".t tbody tr").length`)) === 14);
+  await tab("desempenho"); check("tabela de desempenho", (await ev(`return document.querySelector("table.t").querySelectorAll("tbody tr").length`)) === 14);
   // SAÍDA DO EXPERIMENTO: baia 2 morre → sai das médias, alertas, nova observação e estatística; histórico fica
   const b2 = await ev(`const e=${DB};const a=e.animais.find(a=>a.baia==="2");return {id:a.id,n:e.pesagens.filter(p=>isFinite(p.pesos[a.id])).length}`);
   await tab("animais"); await click(`[data-ed="${b2.id}"]`); await click("#openSaida");

@@ -16,6 +16,7 @@ node $T/smoke-tab.js    $B $OUT $T/fake-supabase.js 1366   # Entrar/Criar conta 
 node $T/smoke-adapt.js  $B $OUT 1366            # fase de adaptação (etapas, Dieta agora, só dieta final)
 node $T/smoke-esp.js    $B $OUT 1366            # espécies (científico, nova espécie, migração Vaca→Bovino)
 node $T/smoke-obs.js    $B $OUT 1366            # tela Observar vazia
+node $T/smoke-peso.js   $B $OUT 1366            # pesagem antes e depois (opção, Início, inicial/final, análise)
 ```
 
 O último número é a largura da tela: use **390** para celular e **1366** para computador. Cada linha

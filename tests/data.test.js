@@ -116,4 +116,50 @@ const sAd = { expId: "ad", animais: ["Baia 1"], animalIds: ["b1"], comp: [{ id: 
 assert.strictEqual(D.behaviorVars(ad, [sAd]).by.b1["b:ruminando"], 2 / 3 * 1440);
 assert.strictEqual(D.behaviorVars(ad, [sAd], { soFinal: true }).by.b1["b:ruminando"], 1440, "marcação da adaptação fica de fora");
 
+// Peso antes e depois: primeira e última pesagem de cada animal, período todo; quem saiu fica fora das médias
+const pd = {
+  id: "pd", rotulo: "Baia",
+  grupos: [{ id: "g1", nome: "A" }, { id: "g2", nome: "B" }],
+  animais: [{ id: "x1", baia: "1", grupoId: "g1" }, { id: "x2", baia: "2", grupoId: "g1" }, { id: "x3", baia: "3", grupoId: "g2" },
+    { id: "x4", baia: "4", grupoId: "g2" }, { id: "x5", baia: "5", grupoId: "g2", saida: { data: "2026-01-05", motivo: "Morte" } }, { id: "x6", baia: "6", grupoId: "g1" }],
+  pesagens: [
+    { id: "q2", data: "2026-01-31", pesos: { x1: 330, x2: 324, x3: 345, x4: 350 } },
+    { id: "q1", data: "2026-01-01", pesos: { x1: 300, x2: 300, x3: 300, x4: 302, x5: 290, x6: 310 } },
+    { id: "q3", data: "2026-02-10", pesos: { x1: 340 } }],
+  consumo: []
+};
+const AD = D.antesDepois(pd);
+const r1 = AD.rows.find(r => r.id === "x1");
+assert.strictEqual(r1.p0, 300); assert.strictEqual(r1.pf, 340); assert.strictEqual(r1.dias, 40); near(r1.ganho, 40); near(r1.pct, 40 / 3); near(r1.gmd, 1);
+assert.ok(!isFinite(AD.rows.find(r => r.id === "x6").ganho), "só a pesagem inicial: sem ganho");
+assert.strictEqual(AD.saidas, 1); assert.strictEqual(AD.completos, 4); assert.strictEqual(AD.comInicial, 5);
+const adA = AD.grupos[0], adB = AD.grupos[1];
+assert.strictEqual(adA.n, 2); assert.strictEqual(adA.semFinal, 1); near(adA.ganho, 32); near(adA.p0, 300);
+assert.strictEqual(adB.n, 2); near(adB.ganho, 46.5); assert.strictEqual(adB.teste.n, 2);
+assert.strictEqual(AD.inicial.N, 5, "peso inicial compara quem ainda está no experimento, mesmo sem a final");
+assert.strictEqual(AD.ganho.N, 4);
+const DSp = D.dataset(pd, []);
+near(DSp.rows.find(r => r.id === "x1").v.gt, 40);
+// jejum: inicial sem jejum e final com 16 h → aviso; sem jejum informado não avisa
+assert.strictEqual(AD.jejumDif, 0);
+pd.pesagens.find(p => p.id === "q1").jejum = 0; pd.pesagens.find(p => p.id === "q2").jejum = 16; pd.pesagens.find(p => p.id === "q3").jejum = 16;
+const ADj = D.antesDepois(pd);
+assert.strictEqual(ADj.jejumDif, 4); assert.deepStrictEqual(ADj.jejuns, ["0→16"]); assert.strictEqual(ADj.rows[0].j0, 0);
+assert.strictEqual(D.jejumDe({ jejum: "" }), null); assert.strictEqual(D.jejumDe({ jejum: "12" }), 12);
+// perda no jejum: par de pesagens a até 2 dias, uma cheia e outra em jejum (o par mais recente vale)
+assert.strictEqual(D.perdaJejum(pd), null, "q2 e q3 têm 10 dias de diferença e o mesmo jejum");
+pd.pesagens.push({ id: "q4", data: "2026-02-09", jejum: 0, pesos: { x1: 350, x3: 380 } });
+const PJ = D.perdaJejum(pd);
+assert.strictEqual(PJ.cheio.id, "q4"); assert.strictEqual(PJ.jejum.id, "q3"); assert.deepStrictEqual(PJ.horas, [0, 16]);
+assert.strictEqual(PJ.rows.length, 1, "só quem tem as duas pesagens");
+// GMD só com o jejum padrão: a pesagem cheia (sem jejum) fica fora
+assert.deepStrictEqual(D.pesagensFora(pd, 16).map(p => p.id).sort(), ["q1", "q4"]); assert.deepStrictEqual(D.pesagensFora(pd, undefined), []);
+const p16 = D.performance(pd, { jejum: 16 }).find(p => p.id === "x1"), pAll = D.performance(pd).find(p => p.id === "x1");
+assert.strictEqual(p16.p0, 330); assert.strictEqual(p16.pf, 340); near(p16.gmd, 1); assert.strictEqual(pAll.p0, 300, "todas: a inicial sem jejum entra");
+const ad16 = D.antesDepois(pd, { jejum: 16 });
+assert.strictEqual(ad16.rows.find(r => r.id === "x1").p0, 330); assert.strictEqual(ad16.jejumDif, 0, "só jejum padrão: sem aviso");
+pd.pesagens.push({ id: "q5", data: "2026-02-20", pesos: { x1: 345 } }); // jejum não informado continua entrando
+assert.strictEqual(D.performance(pd, { jejum: 16 }).find(p => p.id === "x1").pf, 345);
+near(D.dataset(pd, [], { jejum: 16 }).rows.find(r => r.id === "x1").v.gt, 15); near(PJ.rows[0].kg, 10); near(PJ.rows[0].pct, 100 * 10 / 350);
+
 console.log("Dados: todos os testes passaram.");

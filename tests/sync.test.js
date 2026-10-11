@@ -83,6 +83,13 @@ const fresh = () => ({ v: 2, active: null, species: [], experiments: [], session
   const eV = volta.experiments.find(e => e.id === "e1");
   assert.deepStrictEqual(eV.config, eA.config); assert.deepStrictEqual(eV.grupos[0].etapas, eA.grupos[0].etapas);
   assert.strictEqual(Sync.stable(Sync.toRows(volta)), Sync.stable(rA), "ida e volta com adaptação");
+  // jejum da pesagem: só vai quando informado; 0 (sem jejum) também vai e volta
+  assert.ok(rows.weighings.length && !("jejum" in rows.weighings[0]), "pesagem sem jejum informado não manda a coluna");
+  const comJ = mkDb(); comJ.experiments.find(e => e.id === "e1").pesagens[0].jejum = 0;
+  const rJ = Sync.toRows(comJ); assert.strictEqual(rJ.weighings[0].jejum, 0);
+  const vJ = Sync.applyRows(fresh(), JSON.parse(JSON.stringify(rJ)));
+  assert.strictEqual(vJ.experiments.find(e => e.id === "e1").pesagens[0].jejum, 0, "sem jejum (0) volta como 0");
+  rJ.weighings[0].jejum = 16; assert.strictEqual(Sync.applyRows(vJ, rJ).experiments.find(e => e.id === "e1").pesagens[0].jejum, 16);
 
   // Aparelho A envia tudo; segundo envio não manda nada
   const srv = fakeServer(); const A = mkDb(), shA = {};

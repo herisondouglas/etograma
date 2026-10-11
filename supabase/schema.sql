@@ -127,6 +127,7 @@ create table if not exists public.sessions (
 -- etapas = [{"inicio":"AAAA-MM-DD","conc":50}, …] (a última é a dieta final; volumoso = 100 − conc)
 alter table public.experiments add column if not exists config jsonb;
 alter table public.treatments  add column if not exists etapas jsonb;
+alter table public.weighings   add column if not exists jejum numeric; -- horas de jejum antes da pesagem (0 = sem jejum)
 
 create index if not exists treatments_exp on public.treatments(experiment_id, updated_at);
 create index if not exists animals_exp    on public.animals(experiment_id, updated_at);
@@ -369,7 +370,7 @@ where not a.deleted and not e.deleted;
 
 create or replace view public.vw_pesagens with (security_invoker = on) as
 select e.id as experimento_id, e.nome as experimento, a.id as animal_id, a.baia, a.brinco, t.nome as tratamento,
-       w.data, (kv.value)::numeric as peso_kg, (a.saida is null) as ativo
+       w.data, (kv.value)::numeric as peso_kg, (a.saida is null) as ativo, w.jejum as jejum_h
 from public.weighings w
 join public.experiments e on e.id = w.experiment_id
 cross join lateral jsonb_each_text(w.pesos) kv

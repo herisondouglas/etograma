@@ -16,7 +16,7 @@ no mesmo experimento vê as mudanças dos outros quase na hora.
 1. No menu da esquerda, abra **SQL Editor** → **New query**.
 2. Abra o arquivo [`supabase/schema.sql`](../supabase/schema.sql) deste projeto, copie **tudo**, cole e clique em **Run**.
 3. Deve aparecer "Success". Pode rodar de novo no futuro (quando o app ganhar tabelas novas) sem perder dados.
-4. **Atualizações:** quando o app ganha campos novos (ex.: fase de adaptação: `config` e `etapas`), rode o `schema.sql` inteiro de novo. Se o app mostrar "O banco precisa ser atualizado", é isso que falta.
+4. **Atualizações:** quando o app ganha campos novos (ex.: fase de adaptação: `config` e `etapas`; jejum das pesagens: `weighings.jejum`), rode o `schema.sql` inteiro de novo. Se o app mostrar "O banco precisa ser atualizado", é isso que falta.
 
 ## 2b. Lista de acessos (quem pode usar o app)
 
