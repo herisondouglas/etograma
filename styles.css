@@ -592,3 +592,8 @@ body.auth main{padding:0;max-width:none}
 .conc-t{font-size:.86rem;font-weight:500;color:var(--ink-2)}
 .analise .spread{flex-wrap:wrap;gap:12px}
 .analise .grow{flex:1 1 260px}
+
+/* nova espécie dentro do formulário do experimento */
+.esp-nova{margin-top:2px;border:1px dashed var(--line-2);border-radius:var(--r);padding:16px;display:flex;flex-direction:column;gap:14px;background:var(--surface-2)}
+.esp-nova h3{font-size:1.05rem}
+#xSpH i{font-style:italic;color:var(--ink-2)}

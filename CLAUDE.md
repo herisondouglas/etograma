@@ -78,7 +78,7 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 {
   v: 2,
   active: "<id do experimento ativo>",
-  species: [{ id, nome, comp: [{ id, nome, tipo: "comum" | "raro" }] }],
+  species: [{ id, nome, cientifico?, comp: [{ id, nome, tipo: "comum" | "raro" }] }], // ids fixos vaca/porco/cavalo/ovelha/cabra/galinha = Bovino, Suíno, Equino, Ovino, Caprino, Ave (galinha)
   experiments: [{
     id, nome, especieId, especie, responsavel, inicio: "AAAA-MM-DD", exemplo?,
     rotulo: "Baia" | "Animal",   // como os animais são identificados: "Baia 7" (número da baia) ou "Animal 07" (brinco)
@@ -101,6 +101,8 @@ que chame a API da Anthropic. **Nunca** colocar a chave de API no front-end.
 ```
 
 Ao criar um experimento por baia, o app já cria Baia 1…N (padrão 12) e mostra a grade "Dieta de cada baia": a divisão escolhida (ordem do curral — padrão —, alternando ou em sequência) só preenche; tocar numa baia troca a dieta; baias sem regra ficam "escolher" e o experimento não é criado enquanto houver baia sem dieta. Na aba Animais há um botão por dieta ("+ Baia 13 · Dieta 40%", "+ Baia 13 · Dieta 80%"). Animais têm `id` estável e são cadastrados na aba **Animais** (`VIEWS.animals` / `VIEWS.animalForm`), não no formulário do experimento. Corrigir baia/brinco/tratamento mantém pesagens, consumo e observações (e atualiza o nome do animal nas observações). Cadastro rápido aceita faixas (`1-12, 15` → `Data.parseIds`). Baia/brinco repetidos são recusados. Remover pede confirmação e apaga pesos/consumo dele. **Saída do experimento** (`a.saida`, `Data.ativo`): o animal fica no histórico (pesagens, observações, tabela de desempenho com status "Saiu", CSVs com coluna Situação), mas sai de médias, alertas, KPIs, gráficos por tratamento, nova observação, lançamento de pesagem (salvo se já tem valor nele) e da estatística (`Data.dataset` filtra; a tela avisa quantos ficaram de fora). A baia de quem saiu pode ser reocupada; desfazer a saída é bloqueado se a baia estiver ocupada. `Data.migrate` converte dados antigos (em experimentos por baia, o número ficava em `brinco`).
+
+**Espécies:** nomes zootécnicos + nome científico (em itálico embaixo do campo Espécie). "+ Nova espécie…" no formulário do experimento cadastra na hora (nome, científico, comportamentos copiados de outra espécie). A espécie vai junto no experimento (`config.especieDef`) e `especiesDosExperimentos()` a recria no aparelho do observador. `speciesV 3` renomeia Vaca→Bovino etc. (só nomes ainda padrão) e acrescenta o Caprino.
 
 **Fase de adaptação (pedido do cliente):** os tratamentos não mudam; durante a adaptação muda a proporção concentrado/volumoso (ex.: Dieta 80%: 50→60→70→80%, uma etapa por semana) e depois fica na dieta final até o fim. `g.etapas=[{inicio,conc}]` (última = dieta final; volumoso = 100 − conc) e `e.config={adapt,ini,passo,dias,abaixo:"desce"|"direto",analise:"final"|"todo",volumoso}`. Ao criar/editar experimento, a seção "Fase de adaptação" tem as perguntas como opções e monta as etapas (`Data.gerarEtapas`); a tabela é editável (datas/% por dieta, + etapa, tirar) e só volta a seguir as opções com "Refazer". Início mostra "Dieta agora" (`Data.etapaEm`). Com `analise:"final"` (padrão) GMD, consumo e comportamento contam a partir da dieta final de cada tratamento (`soFinal` → `Data.performance/dataset(..., {soFinal})`); Desempenho e Estatística têm o botão "Só dieta final / Período todo". Banco: `experiments.config`, `treatments.etapas` (só enviados quando existem) e visão `vw_etapas`.
 

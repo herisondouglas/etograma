@@ -46,12 +46,16 @@ const icon=(n,cls="i")=>`<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="tr
 const ORDEM_CURRAL="AVVAAVVAVAAV";
 const ladoCurral=i=>i>=1&&i<=ORDEM_CURRAL.length?ORDEM_CURRAL[i-1]:null;
 function B(nome,tipo){return{id:uid(),nome,tipo:tipo||"comum"}}
-function defaultSpecies(){return[
-  {id:"vaca",nome:"Vaca",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
-  {id:"cavalo",nome:"Cavalo",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Rolando","raro"),B("Escoiceando","raro"),B("Se coçando / esfregando","raro")]},
-  {id:"ovelha",nome:"Ovelha",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
-  {id:"galinha",nome:"Galinha",comp:[B("Comendo"),B("Bebendo água"),B("Ciscando"),B("Empoleirada"),B("Deitada"),B("Andando"),B("Arrumando penas"),B("Banho de terra"),B("Bicando outra ave","raro"),B("Ofegando","raro")]},
-  {id:"porco",nome:"Porco",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Sentado"),B("Andando"),B("Fuçando / explorando"),B("Defecando"),B("Urinando"),B("Mordendo outro animal","raro"),B("Brigando","raro"),B("Se coçando / esfregando","raro")]}
+const ESP_ORDEM=["vaca","porco","cavalo","ovelha","cabra","galinha"];
+const CAPRINO=()=>({id:"cabra",nome:"Caprino",cientifico:"Capra hircus",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Escalando / em plataforma"),B("Se coçando / esfregando","raro"),B("Brigando / cabeçada","raro")]});
+function defaultSpecies(){return ordenaEsp([CAPRINO(),...especiesBase()])}
+function ordenaEsp(L){const k=s=>{const i=ESP_ORDEM.indexOf(s.id);return i<0?99:i};return[...L].sort((a,b)=>k(a)-k(b))}
+function especiesBase(){return[
+  {id:"vaca",nome:"Bovino",cientifico:"Bos taurus / Bos indicus",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
+  {id:"cavalo",nome:"Equino",cientifico:"Equus caballus",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Rolando","raro"),B("Escoiceando","raro"),B("Se coçando / esfregando","raro")]},
+  {id:"ovelha",nome:"Ovino",cientifico:"Ovis aries",comp:[B("Comendo"),B("Ruminando"),B("Bebendo água"),B("Ócio"),B("Deitada"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando"),B("Se coçando / esfregando","raro"),B("Esperneando","raro")]},
+  {id:"galinha",nome:"Ave (galinha)",cientifico:"Gallus gallus domesticus",comp:[B("Comendo"),B("Bebendo água"),B("Ciscando"),B("Empoleirada"),B("Deitada"),B("Andando"),B("Arrumando penas"),B("Banho de terra"),B("Bicando outra ave","raro"),B("Ofegando","raro")]},
+  {id:"porco",nome:"Suíno",cientifico:"Sus scrofa domesticus",comp:[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Sentado"),B("Andando"),B("Fuçando / explorando"),B("Defecando"),B("Urinando"),B("Mordendo outro animal","raro"),B("Brigando","raro"),B("Se coçando / esfregando","raro")]}
 ]}
 
 /* Exemplo realista: confinamento com 12 vacas em 2 dietas, 3 pesagens, consumo e 24 h de etograma */
@@ -98,11 +102,11 @@ function exampleData(species){
 const KEYBAD="etograma.ilegivel"; // cópia de dados que não puderam ser lidos: nunca são sobrescritos sem aviso
 let saveFailed=false;
 // O app começa zerado (sem o experimento de exemplo). O exemplo continua disponível em Ajustes → Carregar exemplo.
-function fresh(){return{v:2,speciesV:2,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null}}
+function fresh(){return{v:2,speciesV:3,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null}}
 function load(){
   let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
   if(raw){
-    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return semExemplo(refreshExample(addNewSpecies(Data.migrate(d))))}catch(e){}
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return especiesDosExperimentos(semExemplo(refreshExample(addNewSpecies(Data.migrate(d)))))}catch(e){}
     // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
     try{localStorage.setItem(KEYBAD,raw)}catch(e){}
   }
@@ -111,7 +115,21 @@ function load(){
   return d;
 }
 // Exemplo de versões anteriores é trocado pelo atual (baias 1–12, dieta 40% × 80%, cadastro completo dos animais).
-function addNewSpecies(d){if((d.speciesV||1)<2){if(!d.species.some(s=>s.id==="porco"||norm(s.nome)==="porco"))d.species.push(defaultSpecies().find(s=>s.id==="porco"));d.speciesV=2}return d}
+function addNewSpecies(d){if((d.speciesV||1)<2){if(!d.species.some(s=>s.id==="porco"||norm(s.nome)==="porco"))d.species.push(especiesBase().find(s=>s.id==="porco"));d.speciesV=2}
+  if(d.speciesV<3){ // nomes zootécnicos e científicos (só troca o nome que ainda é o padrão antigo)
+    const NOVO={vaca:["vaca","Bovino"],porco:["porco","Suíno"],cavalo:["cavalo","Equino"],ovelha:["ovelha","Ovino"],galinha:["galinha","Ave (galinha)"]},base=defaultSpecies();
+    for(const s of d.species){const n=NOVO[s.id],b=base.find(x=>x.id===s.id);if(!n)continue;const velho=s.nome;
+      if(norm(s.nome)===n[0])s.nome=n[1];if(!s.cientifico&&b)s.cientifico=b.cientifico;
+      if(velho!==s.nome){for(const e of d.experiments)if(e.especieId===s.id&&e.especie===velho)e.especie=s.nome;
+        for(const x of d.sessions)if(x.especie===velho)x.especie=s.nome}}
+    if(!d.species.some(s=>s.id==="cabra"))d.species.push(CAPRINO());
+    d.species=ordenaEsp(d.species);d.speciesV=3}
+  return d}
+// A espécie vai junto com o experimento (config.especieDef): quem entra pelo código recebe o etograma
+// mesmo que a espécie tenha sido cadastrada só no aparelho do responsável.
+function especiesDosExperimentos(d){for(const e of d.experiments){const s=e.config?.especieDef;
+    if(s&&e.especieId&&!d.species.some(x=>x.id===e.especieId))d.species.push({id:e.especieId,nome:s.nome||e.especie||"Espécie",cientifico:s.cientifico||"",comp:Array.isArray(s.comp)?s.comp:[]})}
+  return d}
 function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="exemplo");
   if(!old||old.exemploV===4)return d;
   try{const ex=exampleData(d.species.some(s=>s.id==="vaca")?d.species:defaultSpecies());
@@ -400,13 +418,18 @@ VIEWS.expForm=function(){
     <div class="card">
       <div class="fields">
         <label class="f">Nome<input type="text" id="xNome" value="${esc(ed?.nome||"")}" placeholder="Ex.: Confinamento Nelore 2026" required></label>
-        <label class="f">Espécie<select id="xSp">${db.species.map(s=>`<option value="${s.id}"${(ed?.especieId||"vaca")===s.id?" selected":""}>${esc(s.nome)}</option>`).join("")}</select></label>
+        <label class="f">Espécie<select id="xSp">${espOpts(ed?.especieId||"vaca")}</select><span class="hint" id="xSpH"></span></label>
         <label class="f">Responsável<input type="text" id="xResp" value="${esc(ed?.responsavel||"")}" placeholder="Quem conduz"></label>
         <label class="f">Data de início<input type="date" id="xIni" value="${ed?.inicio||isoDay(new Date())}" required></label>
         <label class="f">Animais identificados por<select id="xRot"><option value="Baia"${!ed||porBaia(ed)?" selected":""}>Número da baia</option><option value="Animal"${ed&&!porBaia(ed)?" selected":""}>Brinco</option></select></label>
         ${ed?"":`<label class="f" data-nb>Quantas baias <span class="hint">um animal por baia; dá para adicionar mais depois</span><input type="number" id="xNB" value="12" min="0" max="500" inputmode="numeric"></label>
         <label class="f" data-nb>Dividir as baias entre as dietas<select id="xDiv"><option value="curral">Ordem do curral</option><option value="alt">Alternando</option><option value="seq">Em sequência</option></select><span class="hint" id="xDivH"></span></label>`}
       </div>
+      <div class="esp-nova" id="espNova" hidden><div class="card-h"><div><h3>Nova espécie</h3><p>Ela fica disponível para os próximos experimentos e vai junto com este para os observadores.</p></div></div>
+          <div class="fields"><label class="f">Nome<input type="text" id="enNome" placeholder="Ex.: Bubalino" autocomplete="off"></label>
+            <label class="f">Nome científico<input type="text" id="enCient" placeholder="Ex.: Bubalus bubalis" autocomplete="off" spellcheck="false"></label>
+            <label class="f">Comportamentos iniciais<select id="enBase">${db.species.map(s=>`<option value="${s.id}">Copiar de ${esc(s.nome)}</option>`).join("")}<option value="">Lista básica (comendo, bebendo, ócio…)</option></select><span class="hint">dá para editar depois em Ajustes → Etogramas</span></label></div>
+          <div class="row"><button type="button" class="btn primary" id="enAdd">${icon("plus")}Adicionar espécie</button><button type="button" class="btn quiet" id="enCancel">Cancelar</button></div><p class="note" id="enMsg"></p></div>
     </div>
     <div class="spread"><h2>Tratamentos</h2><button type="button" class="btn sm" id="addG">${icon("plus")}Tratamento</button></div>
     <div id="gs" class="grid g2"></div>
@@ -417,6 +440,17 @@ VIEWS.expForm=function(){
     <div class="row"><button class="btn primary" type="submit">${ed?"Salvar alterações":"Criar experimento"}</button>${ed?`<button type="button" class="btn quiet danger" id="delX">Apagar experimento</button>`:""}</div>
   </form>`;
   wireBack({name:"dash"});
+  // espécie: nome científico embaixo; "+ Nova espécie…" abre o cadastro aqui mesmo
+  let espAntes=$("#xSp",app).value;
+  const espHint=()=>{const s=db.species.find(x=>x.id===$("#xSp",app).value);$("#xSpH",app).innerHTML=s&&s.cientifico?`<i>${esc(s.cientifico)}</i>`:""};espHint();
+  $("#xSp",app).onchange=ev=>{if(ev.target.value==="__nova"){$("#espNova",app).hidden=false;$("#enMsg",app).textContent="";ev.target.value=espAntes;$("#enNome",app).focus();return}espAntes=ev.target.value;espHint()};
+  $("#enCancel",app).onclick=()=>{$("#espNova",app).hidden=true};
+  $("#enAdd",app).onclick=()=>{const nome=$("#enNome",app).value.trim(),cient=$("#enCient",app).value.trim(),msg=t=>{$("#enMsg",app).textContent=t};
+    if(!nome)return msg("Digite o nome da espécie.");if(db.species.some(s=>norm(s.nome)===norm(nome)))return msg("Já existe uma espécie com esse nome.");
+    const base=db.species.find(s=>s.id===$("#enBase",app).value);
+    const sp={id:uid(),nome,cientifico:cient,comp:base?base.comp.map(c=>({...c,id:uid()})):[B("Comendo"),B("Bebendo água"),B("Ócio"),B("Deitado"),B("Em pé"),B("Andando"),B("Defecando"),B("Urinando")]};
+    db.species.push(sp);save();$("#xSp",app).innerHTML=espOpts(sp.id);espAntes=sp.id;espHint();$("#espNova",app).hidden=true;
+    $("#enNome",app).value="";$("#enCient",app).value="";toast(`Espécie ${nome} cadastrada`)};
   const gs=$("#gs",app);
   const groups=()=>$$("[data-gid]",gs).map(c=>({id:c.dataset.gid,nome:$('[data-k="nome"]',c).value.trim()||"Tratamento",cor:$('[data-k="cor"]',c).value}));
   const refresh=()=>{$$("[data-gid]",gs).forEach(c=>{$(".gdot",c).style.background=corVar($('[data-k="cor"]',c).value,0)});if(!ed)paintGrid();if(window.__adPaint)window.__adPaint()};
@@ -503,7 +537,7 @@ VIEWS.expForm=function(){
       if(ruim){toast(`${g.nome}: confira as datas e as porcentagens das etapas (0 a 100%).`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
       E=Data.etapasDe({etapas:E});if(new Set(E.map(x=>x.inicio)).size<E.length){toast(`${g.nome}: duas etapas no mesmo dia.`);$("#adCard",app).scrollIntoView({behavior:"smooth",block:"center"});return}
       if(E.length){g.etapas=E;const F=E[E.length-1].conc;if(!g.dieta)g.dieta=`${pct(F)} concentrado / ${pct(100-F)} ${vol.toLowerCase()}`}}
-    const config={...(ed?.config||{}),adapt:adOn(),ini:num("#adIni",50),passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value,analise:$("#adAn",app).value,volumoso:vol};
+    const config={...(ed?.config||{}),especieDef:{nome:sp.nome,cientifico:sp.cientifico||"",comp:sp.comp},adapt:adOn(),ini:num("#adIni",50),passo:num("#adPasso",10),dias:num("#adDias",7),abaixo:$("#adAbaixo",app).value,analise:$("#adAn",app).value,volumoso:vol};
     const data={config,nome:$("#xNome",app).value.trim()||"Experimento",especieId:sp.id,especie:sp.nome,responsavel:$("#xResp",app).value.trim(),inicio:$("#xIni",app).value,rotulo:$("#xRot",app).value,grupos:G};
     if(ed){Object.assign(ed,data);save();toast("Experimento salvo");go({name:"dash"})}
     else{const x={id:uid(),...data,animais:[],pesagens:[],consumo:[]};
@@ -516,6 +550,7 @@ VIEWS.expForm=function(){
   };
 };
 
+const espOpts=sel=>db.species.map(s=>`<option value="${s.id}"${sel===s.id?" selected":""}>${esc(s.nome)}</option>`).join("")+`<option value="__nova">+ Nova espécie…</option>`;
 // Concentrado da dieta final: da última etapa, ou o número do nome/descrição ("Dieta 80%", "80% de concentrado")
 function concDe(g){const E=Data.etapasDe(g);if(E.length)return E[E.length-1].conc;const m=/(\d+(?:[.,]\d+)?)\s*%/.exec((g.nome||"")+" "+(g.dieta||""));return m?parseFloat(m[1].replace(",",".")):""}
 // Opções da fase de adaptação (ao criar e ao editar o experimento)
@@ -537,7 +572,7 @@ function adCardHtml(ed){const c=ed?.config||{},on=ed?(c.adapt??Data.temAdaptacao
       <div id="adBox" class="stack" style="gap:12px"></div></div></section>`}
 
 /* ================= ANIMAIS (cadastro) ================= */
-const RACAS={vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
+const RACAS={cabra:["Boer","Saanen","Anglo-Nubiana","Alpina","Savana","Toggenburg","Sem raça definida"],vaca:["Nelore","Angus","Brangus","Senepol","Tabapuã","Guzerá","Gir","Girolando","Holandesa","Jersey","Brahman","Mestiço"],
   cavalo:["Mangalarga Marchador","Quarto de Milha","Crioulo","Árabe","Puro-Sangue Inglês","Campolina","Sem raça definida"],
   ovelha:["Santa Inês","Dorper","Texel","Morada Nova","Suffolk","Lacaune","Sem raça definida"],
   galinha:["Caipira","Embrapa 051","Isa Brown","Hy-Line","Cobb","Ross"],
@@ -1074,7 +1109,7 @@ VIEWS.settings=function(){
     $("#csvMsg",app).textContent=`${n} observação(ões) importada(s)${dup?` · ${dup} já existia(m) e foi(ram) ignorada(s)`:""}${errs.length?`. Não reconheci: ${errs.join(", ")}`:""}.`;if(n)toast("Planilhas importadas")};
   const rm=$("#rmEx",app);if(rm)rm.onclick=()=>{db.experiments=db.experiments.filter(x=>!x.exemplo);db.sessions=db.sessions.filter(s=>!s.exemplo);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Exemplo apagado");render()};
   const ad=$("#addEx",app);if(ad)ad.onclick=()=>{const ex=exampleData(db.species);db.experiments.push(ex.exp);db.sessions.push(...ex.sessions);db.active=ex.exp.id;save();toast("Exemplo carregado");go({name:"dash"})};
-  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,speciesV:2,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null};if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}save();toast(Cloud.user?"Aparelho limpo. Os dados do banco voltam na próxima sincronização.":"Tudo apagado");go({name:"dash"})};
+  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,speciesV:3,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null};if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}save();toast(Cloud.user?"Aparelho limpo. Os dados do banco voltam na próxima sincronização.":"Tudo apagado");go({name:"dash"})};
 };
 VIEWS.species=function(){
   app.innerHTML=pageHead("Ajustes","Etogramas","Mudanças valem para as próximas observações. As já começadas continuam com a lista original.",`<button class="btn" id="addSp">${icon("plus")}Nova espécie</button><button class="btn quiet danger" id="reset">Restaurar padrão</button>`,"Ajustes")+`<div id="spList" class="grid g2"></div>`;
@@ -1082,13 +1117,15 @@ VIEWS.species=function(){
   const list=$("#spList",app);
   db.species.forEach((sp,si)=>{const card=document.createElement("section");card.className="card";
     card.innerHTML=`<div class="row" style="flex-wrap:nowrap"><input type="text" id="spn${sp.id}" value="${esc(sp.nome)}" aria-label="Nome da espécie" style="font-family:var(--display);font-weight:700;font-size:1.2rem;flex:1;min-width:0"><button class="btn sm quiet danger" data-rm>Remover</button></div>
+    <input type="text" id="spc${sp.id}" value="${esc(sp.cientifico||"")}" placeholder="Nome científico (ex.: Bos taurus)" aria-label="Nome científico" spellcheck="false" style="font-style:italic">
     <div class="stack" style="gap:8px">${sp.comp.map(c=>`<div class="beh" data-id="${c.id}"><input type="text" id="b${c.id}" value="${esc(c.nome)}" aria-label="Comportamento"><select id="t${c.id}" aria-label="Tipo"><option value="comum"${c.tipo!=="raro"?" selected":""}>Comum</option><option value="raro"${c.tipo==="raro"?" selected":""}>Fora do comum</option></select><button class="btn sm quiet danger" aria-label="Remover comportamento" data-x>${icon("x")}</button></div>`).join("")}</div>
     <div><button class="btn sm quiet" data-add>${icon("plus")}Comportamento</button></div>`;
     $(`#spn${sp.id}`,card).onchange=ev=>{sp.nome=ev.target.value.trim()||sp.nome;save()};
+    $(`#spc${sp.id}`,card).onchange=ev=>{sp.cientifico=ev.target.value.trim();save()};
     $("[data-rm]",card).onclick=ev=>{const b=ev.currentTarget;if(b.dataset.armed){db.species.splice(si,1);save();render()}else{b.dataset.armed=1;b.textContent="Confirmar?"}};
     $$(".beh",card).forEach(row=>{const c=sp.comp.find(x=>x.id===row.dataset.id);$("input",row).onchange=ev=>{c.nome=ev.target.value.trim()||c.nome;save()};$("select",row).onchange=ev=>{c.tipo=ev.target.value;save()};$("[data-x]",row).onclick=()=>{sp.comp=sp.comp.filter(x=>x!==c);save();render()}});
     $("[data-add]",card).onclick=()=>{sp.comp.push(B("Novo comportamento"));save();render()};list.appendChild(card);});
-  $("#addSp",app).onclick=()=>{db.species.push({id:uid(),nome:"Nova espécie",comp:[B("Comendo"),B("Bebendo água"),B("Ócio")]});save();render()};
+  $("#addSp",app).onclick=()=>{db.species.push({id:uid(),nome:"Nova espécie",cientifico:"",comp:[B("Comendo"),B("Bebendo água"),B("Ócio")]});save();render()};
   $("#reset",app).onclick=ev=>{const b=ev.currentTarget;if(b.dataset.armed){db.species=defaultSpecies();save();render();toast("Etogramas padrão restaurados")}else{b.dataset.armed=1;b.textContent="Confirmar?"}};
 };
 
@@ -1186,7 +1223,7 @@ async function syncNow(){
   finally{Cloud.running=false;Cloud.pending=Sync.pendingCount(db,syncState.shadow);paintSync()}
 }
 // Chegou mudança de outro aparelho: redesenha sem atrapalhar quem está digitando ou marcando
-function afterRemote(changed){
+function afterRemote(changed){especiesDosExperimentos(db);
   if(!exp()&&db.experiments[0])db.active=db.experiments[0].id;
   if(view.name==="sheet"){if(changed.has("sessions:"+view.id))render();else renderChrome();return}
   if(["expForm","animalForm","entry","setup","species"].includes(view.name)){renderChrome();toast("Dados atualizados por outro aparelho");return}
