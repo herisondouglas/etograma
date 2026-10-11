@@ -51,7 +51,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
   - Se `save()` falhar (memória cheia, aba anônima), aparece a barra vermelha `#saveErr` com botão de cópia. Nunca engolir erro de gravação em silêncio.
   - Outra aba que salva dispara o evento `storage` e esta aba recarrega o `db` (não sobrescreve o trabalho da outra).
 - O app começa **zerado** (`fresh()` sem experimentos). O **experimento de exemplo** (dados simulados, `exemplo: true`) só entra por Ajustes → Carregar exemplo. `semExemplo()` tira uma vez (flag `limpoV`) o exemplo que versões antigas criavam sozinhas.
-- `scripts/build-single.js` gera `dist/etograma.html` (arquivo único). É o formato usado para publicar como Artifact no Claude.
+- `scripts/build-single.js` **carimba a versão no `index.html`** (`?v=<hash>` em cada arquivo + `<meta name="etograma-versao">`) e gera `dist/etograma.html` (arquivo único). **Sempre rodar `npm run build` antes do push**: sem o carimbo, o GitHub Pages (cache de 10 min) mistura arquivos velhos e novos. O app confere a versão publicada (`checaVersao`, ao abrir, ao voltar à aba e a cada 30 min) e mostra a barra "Nova versão do Etograma · Atualizar". É o formato usado para publicar como Artifact no Claude.
 
 ### Banco de dados (Supabase): offline-first
 - Fonte da verdade da tela = `db` no localStorage. `save()` = `saveLocal()` + `cloudChanged()` (agenda envio em 1,5 s).

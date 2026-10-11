@@ -290,6 +290,15 @@ table.sheet{border-collapse:separate;border-spacing:0;font-size:.88rem;width:max
 .savebar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:12px 16px 0;padding:12px 16px;border-radius:var(--r-sm);background:var(--bad-2);color:var(--ink);font-size:.9rem}
 .savebar svg{width:20px;height:20px;stroke:var(--bad);flex:none}
 .savebar span{flex:1;min-width:220px}
+/* versão nova publicada: acima das abas no celular */
+.verbar{position:fixed;z-index:60;left:50%;transform:translateX(-50%);bottom:calc(82px + env(safe-area-inset-bottom,0px));width:calc(100% - 24px);max-width:560px;display:flex;flex-wrap:wrap;align-items:center;gap:10px 12px;padding:12px 14px;border-radius:var(--r);background:var(--night);color:var(--on-night);box-shadow:0 12px 40px rgba(0,0,0,.35);font-size:.88rem;animation:verIn .5s cubic-bezier(.2,.8,.2,1)}
+.verbar svg{width:20px;height:20px;stroke:var(--accent);flex:none}
+.verbar span{flex:1;min-width:200px}
+.verbar .btn.quiet{color:var(--on-night-2)}
+@media (min-width:960px){.verbar{bottom:24px}}
+body.auth .verbar{bottom:calc(16px + env(safe-area-inset-bottom,0px))}
+@keyframes verIn{from{opacity:0;transform:translate(-50%,16px)}}
+@media (prefers-reduced-motion:reduce){.verbar{animation:none}}
 @media (min-width:960px){.savebar{margin:20px 40px 0}}
 .legend svg.i{width:15px;height:15px}
 .anlist .beh{grid-template-columns:minmax(0,1fr) 132px 40px}

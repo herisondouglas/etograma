@@ -1681,5 +1681,18 @@ document.addEventListener("scroll",()=>tip.hidden=true,true);
 function place(ev){const w=tip.offsetWidth,h=tip.offsetHeight;let x=ev.clientX+14,y=ev.clientY-h-12;if(x+w>innerWidth-8)x=ev.clientX-w-14;if(y<8)y=ev.clientY+18;tip.style.left=Math.max(8,x)+"px";tip.style.top=y+"px"}
 
 if(!db.active&&db.experiments[0])db.active=db.experiments[0].id;
+/* ---------- versão nova no site ----------
+   O index.html publicado traz <meta name="etograma-versao"> (carimbado pelo npm run build). Ao abrir, ao voltar para a aba
+   e a cada 30 min, busca a página sem cache: se a versão mudou, mostra a barra "Nova versão". Fora de http(s) não faz nada. */
+const VERSAO=document.querySelector('meta[name="etograma-versao"]')?.content||"";
+let versaoNova=false;
+async function checaVersao(){if(!VERSAO||versaoNova||!/^https?:$/.test(location.protocol)||navigator.onLine===false)return;
+  try{const r=await fetch(location.pathname+"?nv="+Date.now(),{cache:"no-store"});if(!r.ok)return;
+    const m=/<meta name="etograma-versao" content="([0-9a-f]+)"/.exec(await r.text());if(!m||m[1]===VERSAO)return;
+    versaoNova=true;const b=document.createElement("div");b.className="verbar";b.id="verBar";b.setAttribute("role","status");
+    b.innerHTML=`${icon("refresh")}<span><b>Nova versão do Etograma.</b> Atualize para ver as novidades. O que você já marcou fica guardado.</span><button class="btn sm primary" id="verGo">Atualizar</button><button class="btn sm quiet" id="verX" aria-label="Depois">Depois</button>`;
+    document.body.appendChild(b);$("#verGo",b).onclick=()=>location.reload();$("#verX",b).onclick=()=>b.remove()}catch(e){}}
+setTimeout(checaVersao,4000);setInterval(checaVersao,30*60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")checaVersao()});
 render();claude();cloudStart();
 })();

@@ -13,6 +13,7 @@ node $T/smoke.js        $B $OUT 1366            # todas as telas, animais, saíd
 node $T/smoke-acesso.js $B $OUT $T/fake-supabase.js 1366   # login obrigatório + lista de acessos
 node $T/smoke-lp.js     $B $OUT $T/fake-supabase.js 1366   # apresentação com rolagem no login
 node $T/smoke-novo.js   $B $OUT $T/fake-supabase.js 1366   # Novidades e Por que usar (animações, menu em pílula)
+node $T/smoke-versao.js http://localhost:5199/ $OUT $T/fake-supabase.js 390   # aviso de versão nova (precisa de PORT=5199 npm run dev rodando)
 node $T/smoke-tab.js    $B $OUT $T/fake-supabase.js 1366   # Entrar/Criar conta com o mesmo tamanho (VH=768 muda a altura)
 node $T/smoke-adapt.js  $B $OUT 1366            # fase de adaptação (etapas, Dieta agora, só dieta final)
 node $T/smoke-esp.js    $B $OUT 1366            # espécies (científico, nova espécie, migração Vaca→Bovino)
