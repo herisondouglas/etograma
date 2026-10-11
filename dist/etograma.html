@@ -1092,11 +1092,12 @@ function exampleData(species){
 /* ================= armazenamento ================= */
 const KEYBAD="etograma.ilegivel"; // cópia de dados que não puderam ser lidos: nunca são sobrescritos sem aviso
 let saveFailed=false;
-function fresh(){const species=defaultSpecies();const ex=exampleData(species);return{v:2,speciesV:2,species,experiments:[ex.exp],sessions:ex.sessions,active:ex.exp.id}}
+// O app começa zerado (sem o experimento de exemplo). O exemplo continua disponível em Ajustes → Carregar exemplo.
+function fresh(){return{v:2,speciesV:2,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null}}
 function load(){
   let raw=null;try{raw=localStorage.getItem(KEY)}catch(e){}
   if(raw){
-    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return refreshExample(addNewSpecies(Data.migrate(d)))}catch(e){}
+    try{const d=JSON.parse(raw);if(d&&d.v===2&&Array.isArray(d.experiments)&&Array.isArray(d.sessions))return semExemplo(refreshExample(addNewSpecies(Data.migrate(d))))}catch(e){}
     // Não dá para ler (arquivo corrompido ou versão mais nova do app): guarda o original para recuperar em Ajustes.
     try{localStorage.setItem(KEYBAD,raw)}catch(e){}
   }
@@ -1112,6 +1113,12 @@ function refreshExample(d){const old=d.experiments.find(x=>x.exemplo&&x.id==="ex
     d.experiments=d.experiments.map(x=>x===old?ex.exp:x);d.sessions=[...d.sessions.filter(s=>!s.exemplo),...ex.sessions];
     localStorage.setItem(KEY,JSON.stringify(d))}catch(e){} // se falhar, segue com o exemplo antigo; nunca perde dados reais
   return d}
+// Uma vez só: tira o exemplo que as versões anteriores criavam sozinhas na primeira abertura
+// (são dados simulados que nunca vão para o banco). Depois disso, quem carregar o exemplo em Ajustes fica com ele.
+function semExemplo(d){if(d.limpoV)return d;
+  d.experiments=d.experiments.filter(x=>!x.exemplo);d.sessions=d.sessions.filter(s=>!s.exemplo);
+  if(!d.experiments.some(x=>x.id===d.active))d.active=d.experiments[0]?.id||null;
+  d.limpoV=1;try{localStorage.setItem(KEY,JSON.stringify(d))}catch(e){}return d}
 let db=load();
 function saveLocal(){
   try{localStorage.setItem(KEY,JSON.stringify(db));if(saveFailed){saveFailed=false;paintSaveBar()}return true}
@@ -2062,7 +2069,7 @@ VIEWS.settings=function(){
     $("#csvMsg",app).textContent=`${n} observação(ões) importada(s)${dup?` · ${dup} já existia(m) e foi(ram) ignorada(s)`:""}${errs.length?`. Não reconheci: ${errs.join(", ")}`:""}.`;if(n)toast("Planilhas importadas")};
   const rm=$("#rmEx",app);if(rm)rm.onclick=()=>{db.experiments=db.experiments.filter(x=>!x.exemplo);db.sessions=db.sessions.filter(s=>!s.exemplo);if(!exp())db.active=db.experiments[0]?.id||null;save();toast("Exemplo apagado");render()};
   const ad=$("#addEx",app);if(ad)ad.onclick=()=>{const ex=exampleData(db.species);db.experiments.push(ex.exp);db.sessions.push(...ex.sessions);db.active=ex.exp.id;save();toast("Exemplo carregado");go({name:"dash"})};
-  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,speciesV:2,species:defaultSpecies(),experiments:[],sessions:[],active:null};if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}save();toast(Cloud.user?"Aparelho limpo. Os dados do banco voltam na próxima sincronização.":"Tudo apagado");go({name:"dash"})};
+  $("#wipe",app).onclick=ev=>{const b=ev.currentTarget;if(!b.dataset.armed){b.dataset.armed=1;b.textContent="Confirmar: apagar tudo?";return}db={v:2,speciesV:2,limpoV:1,species:defaultSpecies(),experiments:[],sessions:[],active:null};if(Cloud.user){syncState.shadow={};syncState.lastPull=null;saveSync()}save();toast(Cloud.user?"Aparelho limpo. Os dados do banco voltam na próxima sincronização.":"Tudo apagado");go({name:"dash"})};
 };
 VIEWS.species=function(){
   app.innerHTML=pageHead("Ajustes","Etogramas","Mudanças valem para as próximas observações. As já começadas continuam com a lista original.",`<button class="btn" id="addSp">${icon("plus")}Nova espécie</button><button class="btn quiet danger" id="reset">Restaurar padrão</button>`,"Ajustes")+`<div id="spList" class="grid g2"></div>`;

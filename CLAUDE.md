@@ -50,7 +50,7 @@ Objetivo: primeiro testar com o pessoal da faculdade (ex.: experimento da Raquel
   - Se `etograma.v2` não puder ser lido, o conteúdo original é copiado para `etograma.ilegivel` antes de qualquer gravação (Ajustes oferece baixar/descartar).
   - Se `save()` falhar (memória cheia, aba anônima), aparece a barra vermelha `#saveErr` com botão de cópia. Nunca engolir erro de gravação em silêncio.
   - Outra aba que salva dispara o evento `storage` e esta aba recarrega o `db` (não sobrescreve o trabalho da outra).
-- Na primeira abertura carrega um **experimento de exemplo** (dados simulados, marcados `exemplo: true`).
+- O app começa **zerado** (`fresh()` sem experimentos). O **experimento de exemplo** (dados simulados, `exemplo: true`) só entra por Ajustes → Carregar exemplo. `semExemplo()` tira uma vez (flag `limpoV`) o exemplo que versões antigas criavam sozinhas.
 - `scripts/build-single.js` gera `dist/etograma.html` (arquivo único). É o formato usado para publicar como Artifact no Claude.
 
 ### Banco de dados (Supabase): offline-first
