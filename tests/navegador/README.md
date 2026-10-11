@@ -12,6 +12,7 @@ B=dist/etograma.html; OUT=/tmp/etograma-testes; T=tests/navegador
 node $T/smoke.js        $B $OUT 1366            # todas as telas, animais, saída, erros de gravação, migrações
 node $T/smoke-acesso.js $B $OUT $T/fake-supabase.js 1366   # login obrigatório + lista de acessos
 node $T/smoke-lp.js     $B $OUT $T/fake-supabase.js 1366   # apresentação com rolagem no login
+node $T/smoke-novo.js   $B $OUT $T/fake-supabase.js 1366   # Novidades e Por que usar (animações, menu em pílula)
 node $T/smoke-tab.js    $B $OUT $T/fake-supabase.js 1366   # Entrar/Criar conta com o mesmo tamanho (VH=768 muda a altura)
 node $T/smoke-adapt.js  $B $OUT 1366            # fase de adaptação (etapas, Dieta agora, só dieta final)
 node $T/smoke-esp.js    $B $OUT 1366            # espécies (científico, nova espécie, migração Vaca→Bovino)

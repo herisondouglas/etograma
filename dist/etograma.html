@@ -469,8 +469,8 @@ body.auth main{padding:0;max-width:none}
 .lp-nav .brand{color:var(--on-night);text-decoration:none;font-size:1.05rem}
 .lp-nav .btn{border-radius:999px}
 .lp-links{display:none;gap:2px}
-@media (min-width:760px){.lp-links{display:flex}}
-.lp-links a{color:var(--on-night-2);text-decoration:none;font-family:var(--display);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;padding:8px 10px;border-radius:99px;transition:color .2s,background .2s}
+@media (min-width:1000px){.lp-links{display:flex}.lp-nav.compact{max-width:840px}} /* 5 links: só cabem em telas largas */
+.lp-links a{white-space:nowrap;color:var(--on-night-2);text-decoration:none;font-family:var(--display);font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;padding:8px 10px;border-radius:99px;transition:color .2s,background .2s}
 .lp-links a:hover,.lp-links a:focus-visible{color:var(--on-night);background:rgba(255,255,255,.08)}
 .lp-more{display:inline-flex;align-items:center;gap:8px;font-family:var(--display);font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--muted);text-decoration:none;padding:6px 0}
 .lp-more:hover{color:var(--ink)}
@@ -559,6 +559,77 @@ body.auth main{padding:0;max-width:none}
 .lp-l p{color:var(--ink-2);margin:6px 0 0;font-size:.95rem}
 .lp-stack{display:flex;flex-wrap:wrap;gap:8px;margin:24px 0 0}
 .lp-stack span{border:1px solid var(--line-2);border-radius:99px;padding:7px 14px;font-family:var(--display);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--ink-2)}
+/* novidades */
+.lp-new-h{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 32px}
+.lp-new-h .lp-h{margin-bottom:clamp(28px,5vw,48px)}
+.lp-ver{display:flex;flex-direction:column;gap:4px;margin-bottom:clamp(28px,5vw,48px);padding-left:14px;border-left:2px solid var(--accent)}
+.lp-ver b{font-size:1.4rem;font-weight:500;letter-spacing:-.03em}
+.lp-ver small{font-family:var(--display);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;font-weight:600;color:var(--muted)}
+.lp-news{display:grid;gap:16px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:980px){.lp-news{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.lp-new{display:flex;flex-direction:column;gap:20px;padding:16px 16px 22px;border-radius:20px;background:var(--surface);border:1px solid var(--line);transition-delay:calc(var(--k)*90ms)}
+.lp-new-t{padding:0 6px}
+.lp-new h3,.lp-mini h3,.lp-por h3{font-size:clamp(1.45rem,3vw,1.9rem);letter-spacing:-.035em;margin:12px 0 8px}
+.lp-new p,.lp-mini p{color:var(--ink-2);margin:0;font-size:.95rem}
+.lp-new .lp-foot{margin-top:12px;font-size:.8rem;color:var(--muted)}
+.lp-tag{display:inline-flex;align-items:center;padding:4px 10px;border-radius:99px;border:1px solid var(--line-2);font-family:var(--display);font-size:.6rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--ink-2)}
+.lp-tag.new{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.lp-nv{min-height:236px;gap:14px}
+.nv-leg{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:.74rem;color:var(--on-night-2);font-weight:600}
+.nv-leg i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--on-night);margin-right:6px;vertical-align:-1px}
+.nv-leg i.o{background:none;border:2px solid var(--on-night)}
+.nv-leg .num{margin-left:auto;color:var(--on-night)}
+.nv-dumb{display:grid;gap:12px}
+.nv-d{display:grid;grid-template-columns:52px minmax(0,1fr) 54px;align-items:center;gap:10px;font-size:.74rem;color:var(--on-night-2);font-weight:600}
+.nv-d i{position:relative;height:14px}
+.nv-d i::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px dashed rgba(255,255,255,.12)}
+.nv-d b{position:absolute;top:50%;left:var(--a);width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;border:2.2px solid var(--c);background:var(--night);z-index:1}
+.nv-d u{position:absolute;top:50%;left:var(--a);height:3px;margin-top:-1.5px;width:0;background:var(--c);opacity:.6;border-radius:2px;transition:width 1s cubic-bezier(.2,.8,.2,1) calc(.3s + var(--d))}
+.nv-d s{position:absolute;top:50%;left:var(--a);width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--c);box-shadow:0 0 0 2px var(--night);opacity:0;transition:left 1s cubic-bezier(.2,.8,.2,1) calc(.3s + var(--d)),opacity .3s calc(.3s + var(--d))}
+.nv-d em{font-style:normal;text-align:right;color:var(--on-night);opacity:0;transition:opacity .4s calc(1.1s + var(--d))}
+.lp-new.in .nv-d u{width:calc(var(--b) - var(--a))}
+.lp-new.in .nv-d s{left:var(--b);opacity:1}
+.lp-new.in .nv-d em{opacity:1}
+.nv-jj{display:grid;gap:12px}
+.nv-row{display:grid;grid-template-columns:92px minmax(0,1fr) 62px;align-items:center;gap:10px;font-size:.74rem;color:var(--on-night-2);font-weight:600}
+.nv-row i{display:block;height:22px;border-radius:5px;background:var(--hay);width:0;transition:width 1.1s cubic-bezier(.2,.8,.2,1) .3s}
+.nv-row.j i{background:var(--accent);transition-delay:.6s}
+.nv-row b{text-align:right;color:var(--on-night);font-weight:500}
+.lp-new.in .nv-row i{width:var(--w)}
+.nv-perda{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;padding-top:6px;border-top:1px solid rgba(255,255,255,.1)}
+.nv-perda b{font-size:2rem;font-weight:500;letter-spacing:-.03em;color:var(--accent)}
+.nv-perda span{font-size:.76rem;color:var(--on-night-2)}
+.nv-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;align-items:end;height:170px}
+.nv-s{display:flex;flex-direction:column;justify-content:flex-end;height:100%;gap:6px;text-align:center}
+.nv-s i{display:block;height:var(--h);border-radius:6px 6px 3px 3px;background:var(--accent);opacity:.55;transform-origin:bottom;transform:scaleY(0);transition:transform .9s cubic-bezier(.2,.8,.2,1) var(--d)}
+.nv-s.fim i{opacity:1}
+.nv-s b{font-size:.84rem;font-weight:500;color:var(--on-night);opacity:0;transition:opacity .4s calc(.6s + var(--d))}
+.nv-s span{font-family:var(--display);font-size:.56rem;letter-spacing:.12em;text-transform:uppercase;font-weight:600;color:var(--on-night-2)}
+.lp-new.in .nv-s i{transform:none}
+.lp-new.in .nv-s b{opacity:1}
+.lp-mini{display:grid;grid-template-columns:minmax(0,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;margin-top:16px}
+@media (min-width:760px){.lp-mini{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (min-width:1100px){.lp-mini{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.lp-mini>div{background:var(--surface);padding:22px 20px}
+.lp-mini h3{font-size:1.2rem;margin:12px 0 6px}
+.lp-mini p{font-size:.88rem}
+/* por que usar */
+.lp-por{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+@media (min-width:860px){.lp-por{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.lp-por>div{padding:24px 22px;border-radius:20px;background:var(--surface);border:1px solid var(--line);transition-delay:calc(var(--k)*90ms)}
+.lp-por h3{margin:8px 0 14px}
+.lp-por ul{list-style:none;margin:0;padding:0;display:grid;gap:10px}
+.lp-por li{position:relative;padding-left:22px;color:var(--ink-2);font-size:.95rem}
+.lp-por li::before{content:"";position:absolute;left:0;top:.5em;width:10px;height:2px;background:var(--accent);border-radius:2px}
+.lp-vs{margin-top:16px;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface)}
+.lp-vs-r{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1fr) minmax(0,1fr);gap:12px;padding:15px 20px;border-top:1px solid var(--line);font-size:.92rem;align-items:baseline}
+.lp-vs-r:first-child{border-top:0}
+.lp-vs-r.h span{font-family:var(--display);font-size:.62rem;letter-spacing:.14em;text-transform:uppercase;font-weight:700;color:var(--muted)}
+.lp-vs-r.h span:last-child{color:var(--accent-text)}
+.lp-vs-r b{font-family:var(--display);font-weight:600}
+.lp-vs-r span{color:var(--muted)}
+.lp-vs-r span.ok{color:var(--ink)}
+@media (max-width:599px){.lp-vs-r{grid-template-columns:minmax(0,1fr) minmax(0,1fr);padding:14px 16px}.lp-vs-r b{grid-column:1/-1}.lp-vs-r.h span:first-child{display:none}}
 /* chamada final: o cartão se abre ao aparecer */
 .lp-cta{max-width:1120px;margin:clamp(72px,12vw,140px) auto 0;background:var(--night);border:1px solid var(--line);color:var(--on-night);border-radius:24px;padding:clamp(36px,7vw,80px) clamp(22px,5vw,64px);position:relative;overflow:hidden;isolation:isolate;
   transform:scale(.92);opacity:.5;transition:transform 1s cubic-bezier(.2,.8,.2,1),opacity 1s}
@@ -572,7 +643,8 @@ body.auth main{padding:0;max-width:none}
 @media (prefers-reduced-motion:reduce){
   .rv,.lp-cta{opacity:1;transform:none;transition:none}.lp-step{transform:none}.lp-step::after{display:none}.lp-frase span{color:var(--ink)}
   .v-bars i,.v-sc circle,.v-team span{transform:none;opacity:1;transition:none}.v-sc .v-line{stroke-dashoffset:0;transition:none}
-  .lp-lang i{width:var(--w);min-width:6px;transition:none}.lp-more svg,.lp-cta::after,.lp-step.in .v-btns span.on,.lp-step.in .v-code span{animation:none}}
+  .lp-lang i{width:var(--w);min-width:6px;transition:none}
+  .nv-d u{width:calc(var(--b) - var(--a));transition:none}.nv-d s{left:var(--b);opacity:1;transition:none}.nv-d em,.nv-s b{opacity:1;transition:none}.nv-row i{width:var(--w);transition:none}.nv-s i{transform:none;transition:none}.lp-more svg,.lp-cta::after,.lp-step.in .v-btns span.on,.lp-step.in .v-code span{animation:none}}
 
 /* acesso restrito */
 .auth-lock{display:inline-flex;align-items:center;gap:6px;font-size:.8rem;color:var(--muted);margin-left:auto}
@@ -2528,7 +2600,7 @@ VIEWS.login=function(){
   const seen=Cloud.authSeen;Cloud.authSeen=true; // a animação de entrada só na primeira vez
   app.innerHTML=`<div class="lp">
   <nav class="lp-nav" id="lpNav" aria-label="Seções"><a class="brand" href="#" data-lp="top"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</a>
-    <span class="lp-links"><a href="#lpHist" data-lp="lpHist">História</a><a href="#lpComo" data-lp="lpComo">Como funciona</a><a href="#lpTech" data-lp="lpTech">Linguagens</a></span>
+    <span class="lp-links"><a href="#lpHist" data-lp="lpHist">História</a><a href="#lpComo" data-lp="lpComo">Como funciona</a><a href="#lpNovo" data-lp="lpNovo">Novidades</a><a href="#lpPor" data-lp="lpPor">Por que usar</a><a href="#lpTech" data-lp="lpTech">Linguagens</a></span>
     <button class="btn primary sm" type="button" data-lp="entrar">Entrar</button></nav>
   <div class="lp-hero" id="lpHero"><div class="auth-wrap${seen?" seen":""}">
     <section class="auth-art" id="authArt" aria-hidden="true">
@@ -2594,13 +2666,48 @@ function lpBody(){
       ${step(2,"Estatística","ANOVA, comparação par a par e correlação entre ruminação, consumo e ganho de peso. O resultado vem explicado em português simples e sai em CSV.",`<svg class="v-sc" viewBox="0 0 100 80"><path class="v-grid" d="M0 20H100M0 40H100M0 60H100"/><path class="v-line" pathLength="1" d="M4 72L98 10"/>${pts.map(([x,y],i)=>`<circle cx="${x}" cy="${y}" r="2.4" style="--d:${i*50}ms"/>`).join("")}</svg><div class="v-r"><span class="num">r = 0,94</span><span class="num">p &lt; 0,001</span></div>`)}
       ${step(3,"Equipe","Quem cria o experimento recebe um código. Os observadores entram com ele e as marcações se juntam sozinhas quando a internet volta.",`<div class="v-code">${"7A3B9C".split("").map(c=>`<span class="num">${c}</span>`).join("")}</div><div class="v-team">${["RA","JP","LM"].map((n,i)=>`<span style="--d:${i*180}ms"><i>${n}</i><small>sincronizado</small></span>`).join("")}</div>`)}
     </div></section>
-  <section class="lp-sec" id="lpTech"><span class="eyebrow rv">03 · Do que é feito</span><h2 class="lp-h rv">Leve de propósito:<br>sem framework, sem instalação.</h2>
+  ${lpNovidades()}
+  ${lpPorque()}
+  <section class="lp-sec" id="lpTech"><span class="eyebrow rv">05 · Do que é feito</span><h2 class="lp-h rv">Leve de propósito:<br>sem framework, sem instalação.</h2>
     <div class="lp-lang rv" role="img" aria-label="${LP_LANG.map(l=>l[0]+" "+(l[1]<1?"menos de 1":l[1])+"%").join(", ")}">${LP_LANG.map(l=>`<i style="--w:${l[1]}%;background:${l[2]}"></i>`).join("")}</div>
     <div class="lp-langs">${LP_LANG.map(l=>`<div class="lp-l rv"><span class="lp-dot" style="background:${l[2]}"></span><div><h3>${l[0]} <small class="num">${l[1]<1?"&lt;1":l[1]}%</small></h3><p>${l[3]}</p></div></div>`).join("")}</div>
     <p class="lp-stack rv">${["Node.js (testes e build)","Supabase","GitHub Pages","Claude (IA)","CSV para R / SAS"].map(s=>`<span>${s}</span>`).join("")}</p></section>
   <section class="lp-cta"><h2>Pronto para a<br>próxima <em>marcação</em>?</h2><div class="row"><button class="btn primary" type="button" data-lp="entrar">Entrar ou criar conta</button></div>
     <p>Etograma · comportamento animal · Zootecnia</p></section>`;
 }
+/* Novidades: as atualizações mais importantes, com um visual animado cada (aparecem com .in ao rolar) */
+const LP_NOVO_MINI=[["Melhoria","Peso anterior ao digitar","Ao lançar uma pesagem, o peso da anterior e a diferença aparecem embaixo de cada campo. Erro de digitação aparece na hora."],
+  ["Novo","Espécies com nome científico","Bovino (Bos taurus), Ovino, Caprino… e espécie nova cadastrada na hora, que vai junto para os observadores."],
+  ["Novo","Saída do animal","Morte, descarte ou venda: o animal sai das médias e da estatística, mas o histórico fica guardado."],
+  ["Melhoria","Acesso só por convite","Só e-mails autorizados criam conta. Tirar alguém da lista corta o acesso na hora."]];
+function lpNovidades(){
+  const card=(i,tag,t,p,vis,foot)=>`<article class="lp-new rv" style="--k:${i}"><div class="lp-vis lp-nv" aria-hidden="true">${vis}</div><div class="lp-new-t"><span class="lp-tag${tag==="Novo"?" new":""}">${tag}</span><h3>${t}</h3><p>${p}</p>${foot?`<p class="lp-foot">${foot}</p>`:""}</div></article>`;
+  // halteres: antes (vazado) → depois (cheio)
+  const dumb=[["Baia 1",14,62,"+33"],["Baia 4",20,70,"+35"],["Baia 2",10,84,"+51"],["Baia 3",16,90,"+52"]].map(([b,a,d,g],i)=>`<div class="nv-d" style="--a:${a}%;--b:${d}%;--d:${i*120}ms;--c:${i<2?"var(--s1)":"var(--s5)"}"><span>${b}</span><i><b></b><u></u><s></s></i><em class="num">${g} kg</em></div>`).join("");
+  const steps=[[50,"Semana 1"],[60,"Semana 2"],[70,"Semana 3"],[80,"Final"]].map(([c,l],i)=>`<div class="nv-s${i===3?" fim":""}" style="--h:${c}%;--d:${i*140}ms"><b class="num">${c}%</b><i></i><span>${l}</span></div>`).join("");
+  return`<section class="lp-sec" id="lpNovo"><span class="eyebrow rv">03 · Novidades</span>
+    <div class="lp-new-h rv"><h2 class="lp-h">O que chegou<br>nesta versão.</h2><span class="lp-ver"><b class="num">Out 2026</b><small>pedidos da equipe de testes</small></span></div>
+    <div class="lp-news">
+      ${card(0,"Novo","Peso antes e depois","Pese no começo e no fim. O app compara cada animal e cada dieta, testa se o ganho é real (teste t pareado) e confere se as dietas começaram com peso parecido. Se não começaram, ele avisa para usar o peso inicial como covariável.",
+        `<div class="nv-dumb">${dumb}</div><div class="nv-leg"><span><i class="o"></i>Antes</span><span><i></i>Depois</span><span class="num">t pareado · p &lt; 0,001</span></div>`)}
+      ${card(1,"Novo","Jejum em cada pesagem","Peso cheio e peso em jejum não se comparam: comida e água no trato digestivo pesam. Cada pesagem guarda o seu jejum, o app avisa quando o começo e o fim não batem e calcula o GMD só com o jejum padrão.",
+        `<div class="nv-jj"><div class="nv-row"><span>Cheio</span><i style="--w:100%"></i><b class="num">362 kg</b></div><div class="nv-row j"><span>16 h de jejum</span><i style="--w:95.3%"></i><b class="num">345 kg</b></div></div><div class="nv-perda"><b class="num">−4,7%</b><span>perda no jejum, por dieta e com ANOVA</span></div>`,
+        "O conteúdo do rúmen pode chegar a cerca de 15% do peso vivo.")}
+      ${card(2,"Novo","Fase de adaptação","Da dieta de transição até a final, uma etapa por semana (ex.: 50 → 60 → 70 → 80% de concentrado). O app monta as etapas, mostra a dieta de hoje no Início e pode analisar só o período da dieta final.",
+        `<div class="nv-steps">${steps}</div><div class="nv-leg"><span>concentrado</span><span>/</span><span>volumoso</span></div>`)}
+    </div>
+    <div class="lp-mini">${LP_NOVO_MINI.map(([tag,t,p])=>`<div class="rv"><span class="lp-tag${tag==="Novo"?" new":""}">${tag}</span><h3>${t}</h3><p>${p}</p></div>`).join("")}</div></section>`}
+// Por que usar: o que muda para cada pessoa e a comparação com o papel
+const LP_POR=[["No curral","Para quem observa",["Botões grandes, uma mão só","Vibra a cada 5 minutos e a tela não apaga","Funciona sem sinal e envia quando a internet volta"]],
+  ["Na análise","Para quem pesquisa",["Tabela por animal pronta: peso, GMD, consumo e comportamento em min/dia","ANOVA, correlação e antes e depois explicados em português","CSV direto para o R e o SAS"]],
+  ["Na equipe","Para quem coordena",["Todos no mesmo experimento, com código de convite","Alertas de animais abaixo da meta","Acesso controlado por lista de e-mails"]]];
+const LP_VS=[["Marcação","Um X na folha, de olho no relógio","Um toque, no horário certo"],["Digitação","Folha por folha, depois","Nenhuma: os dados já estão no app"],["Erro de digitação","Aparece na análise (se aparecer)","Avisado enquanto digita"],
+  ["Peso e jejum","Anotados à parte","Cada pesagem com o seu jejum"],["Resultado","Dias depois","Na hora, com explicação"]];
+function lpPorque(){
+  return`<section class="lp-sec" id="lpPor"><span class="eyebrow rv">04 · Por que usar</span><h2 class="lp-h rv">Menos papel,<br>mais pesquisa.</h2>
+    <div class="lp-por">${LP_POR.map(([t,s,L],i)=>`<div class="rv" style="--k:${i}"><span class="eyebrow">${s}</span><h3>${t}</h3><ul>${L.map(x=>`<li>${x}</li>`).join("")}</ul></div>`).join("")}</div>
+    <div class="lp-vs rv" role="table" aria-label="Papel e Etograma"><div class="lp-vs-r h" role="row"><span role="columnheader"></span><span role="columnheader">No papel</span><span role="columnheader">No Etograma</span></div>
+      ${LP_VS.map(([k,a,b])=>`<div class="lp-vs-r" role="row"><b role="rowheader">${k}</b><span role="cell">${a}</span><span role="cell" class="ok">${b}</span></div>`).join("")}</div></section>`}
 function wireLanding(){
   const page=$(".lp",app);if(!page)return;
   const nav=$("#lpNav",app),hero=$("#lpHero",app),wrap=$(".auth-wrap",hero),steps=$$(".lp-step",app),words=$$("#lpFrase span",app),time=$("#lpTime",app);

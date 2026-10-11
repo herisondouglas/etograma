@@ -1470,7 +1470,7 @@ VIEWS.login=function(){
   const seen=Cloud.authSeen;Cloud.authSeen=true; // a animação de entrada só na primeira vez
   app.innerHTML=`<div class="lp">
   <nav class="lp-nav" id="lpNav" aria-label="Seções"><a class="brand" href="#" data-lp="top"><span class="mark"><svg viewBox="0 0 24 24"><path d="M4 7h3M9 7h3M14 7h6M4 12h8M14 12h2M18 12h2M4 17h2M8 17h9"/></svg></span>Etograma</a>
-    <span class="lp-links"><a href="#lpHist" data-lp="lpHist">História</a><a href="#lpComo" data-lp="lpComo">Como funciona</a><a href="#lpTech" data-lp="lpTech">Linguagens</a></span>
+    <span class="lp-links"><a href="#lpHist" data-lp="lpHist">História</a><a href="#lpComo" data-lp="lpComo">Como funciona</a><a href="#lpNovo" data-lp="lpNovo">Novidades</a><a href="#lpPor" data-lp="lpPor">Por que usar</a><a href="#lpTech" data-lp="lpTech">Linguagens</a></span>
     <button class="btn primary sm" type="button" data-lp="entrar">Entrar</button></nav>
   <div class="lp-hero" id="lpHero"><div class="auth-wrap${seen?" seen":""}">
     <section class="auth-art" id="authArt" aria-hidden="true">
@@ -1536,13 +1536,48 @@ function lpBody(){
       ${step(2,"Estatística","ANOVA, comparação par a par e correlação entre ruminação, consumo e ganho de peso. O resultado vem explicado em português simples e sai em CSV.",`<svg class="v-sc" viewBox="0 0 100 80"><path class="v-grid" d="M0 20H100M0 40H100M0 60H100"/><path class="v-line" pathLength="1" d="M4 72L98 10"/>${pts.map(([x,y],i)=>`<circle cx="${x}" cy="${y}" r="2.4" style="--d:${i*50}ms"/>`).join("")}</svg><div class="v-r"><span class="num">r = 0,94</span><span class="num">p &lt; 0,001</span></div>`)}
       ${step(3,"Equipe","Quem cria o experimento recebe um código. Os observadores entram com ele e as marcações se juntam sozinhas quando a internet volta.",`<div class="v-code">${"7A3B9C".split("").map(c=>`<span class="num">${c}</span>`).join("")}</div><div class="v-team">${["RA","JP","LM"].map((n,i)=>`<span style="--d:${i*180}ms"><i>${n}</i><small>sincronizado</small></span>`).join("")}</div>`)}
     </div></section>
-  <section class="lp-sec" id="lpTech"><span class="eyebrow rv">03 · Do que é feito</span><h2 class="lp-h rv">Leve de propósito:<br>sem framework, sem instalação.</h2>
+  ${lpNovidades()}
+  ${lpPorque()}
+  <section class="lp-sec" id="lpTech"><span class="eyebrow rv">05 · Do que é feito</span><h2 class="lp-h rv">Leve de propósito:<br>sem framework, sem instalação.</h2>
     <div class="lp-lang rv" role="img" aria-label="${LP_LANG.map(l=>l[0]+" "+(l[1]<1?"menos de 1":l[1])+"%").join(", ")}">${LP_LANG.map(l=>`<i style="--w:${l[1]}%;background:${l[2]}"></i>`).join("")}</div>
     <div class="lp-langs">${LP_LANG.map(l=>`<div class="lp-l rv"><span class="lp-dot" style="background:${l[2]}"></span><div><h3>${l[0]} <small class="num">${l[1]<1?"&lt;1":l[1]}%</small></h3><p>${l[3]}</p></div></div>`).join("")}</div>
     <p class="lp-stack rv">${["Node.js (testes e build)","Supabase","GitHub Pages","Claude (IA)","CSV para R / SAS"].map(s=>`<span>${s}</span>`).join("")}</p></section>
   <section class="lp-cta"><h2>Pronto para a<br>próxima <em>marcação</em>?</h2><div class="row"><button class="btn primary" type="button" data-lp="entrar">Entrar ou criar conta</button></div>
     <p>Etograma · comportamento animal · Zootecnia</p></section>`;
 }
+/* Novidades: as atualizações mais importantes, com um visual animado cada (aparecem com .in ao rolar) */
+const LP_NOVO_MINI=[["Melhoria","Peso anterior ao digitar","Ao lançar uma pesagem, o peso da anterior e a diferença aparecem embaixo de cada campo. Erro de digitação aparece na hora."],
+  ["Novo","Espécies com nome científico","Bovino (Bos taurus), Ovino, Caprino… e espécie nova cadastrada na hora, que vai junto para os observadores."],
+  ["Novo","Saída do animal","Morte, descarte ou venda: o animal sai das médias e da estatística, mas o histórico fica guardado."],
+  ["Melhoria","Acesso só por convite","Só e-mails autorizados criam conta. Tirar alguém da lista corta o acesso na hora."]];
+function lpNovidades(){
+  const card=(i,tag,t,p,vis,foot)=>`<article class="lp-new rv" style="--k:${i}"><div class="lp-vis lp-nv" aria-hidden="true">${vis}</div><div class="lp-new-t"><span class="lp-tag${tag==="Novo"?" new":""}">${tag}</span><h3>${t}</h3><p>${p}</p>${foot?`<p class="lp-foot">${foot}</p>`:""}</div></article>`;
+  // halteres: antes (vazado) → depois (cheio)
+  const dumb=[["Baia 1",14,62,"+33"],["Baia 4",20,70,"+35"],["Baia 2",10,84,"+51"],["Baia 3",16,90,"+52"]].map(([b,a,d,g],i)=>`<div class="nv-d" style="--a:${a}%;--b:${d}%;--d:${i*120}ms;--c:${i<2?"var(--s1)":"var(--s5)"}"><span>${b}</span><i><b></b><u></u><s></s></i><em class="num">${g} kg</em></div>`).join("");
+  const steps=[[50,"Semana 1"],[60,"Semana 2"],[70,"Semana 3"],[80,"Final"]].map(([c,l],i)=>`<div class="nv-s${i===3?" fim":""}" style="--h:${c}%;--d:${i*140}ms"><b class="num">${c}%</b><i></i><span>${l}</span></div>`).join("");
+  return`<section class="lp-sec" id="lpNovo"><span class="eyebrow rv">03 · Novidades</span>
+    <div class="lp-new-h rv"><h2 class="lp-h">O que chegou<br>nesta versão.</h2><span class="lp-ver"><b class="num">Out 2026</b><small>pedidos da equipe de testes</small></span></div>
+    <div class="lp-news">
+      ${card(0,"Novo","Peso antes e depois","Pese no começo e no fim. O app compara cada animal e cada dieta, testa se o ganho é real (teste t pareado) e confere se as dietas começaram com peso parecido. Se não começaram, ele avisa para usar o peso inicial como covariável.",
+        `<div class="nv-dumb">${dumb}</div><div class="nv-leg"><span><i class="o"></i>Antes</span><span><i></i>Depois</span><span class="num">t pareado · p &lt; 0,001</span></div>`)}
+      ${card(1,"Novo","Jejum em cada pesagem","Peso cheio e peso em jejum não se comparam: comida e água no trato digestivo pesam. Cada pesagem guarda o seu jejum, o app avisa quando o começo e o fim não batem e calcula o GMD só com o jejum padrão.",
+        `<div class="nv-jj"><div class="nv-row"><span>Cheio</span><i style="--w:100%"></i><b class="num">362 kg</b></div><div class="nv-row j"><span>16 h de jejum</span><i style="--w:95.3%"></i><b class="num">345 kg</b></div></div><div class="nv-perda"><b class="num">−4,7%</b><span>perda no jejum, por dieta e com ANOVA</span></div>`,
+        "O conteúdo do rúmen pode chegar a cerca de 15% do peso vivo.")}
+      ${card(2,"Novo","Fase de adaptação","Da dieta de transição até a final, uma etapa por semana (ex.: 50 → 60 → 70 → 80% de concentrado). O app monta as etapas, mostra a dieta de hoje no Início e pode analisar só o período da dieta final.",
+        `<div class="nv-steps">${steps}</div><div class="nv-leg"><span>concentrado</span><span>/</span><span>volumoso</span></div>`)}
+    </div>
+    <div class="lp-mini">${LP_NOVO_MINI.map(([tag,t,p])=>`<div class="rv"><span class="lp-tag${tag==="Novo"?" new":""}">${tag}</span><h3>${t}</h3><p>${p}</p></div>`).join("")}</div></section>`}
+// Por que usar: o que muda para cada pessoa e a comparação com o papel
+const LP_POR=[["No curral","Para quem observa",["Botões grandes, uma mão só","Vibra a cada 5 minutos e a tela não apaga","Funciona sem sinal e envia quando a internet volta"]],
+  ["Na análise","Para quem pesquisa",["Tabela por animal pronta: peso, GMD, consumo e comportamento em min/dia","ANOVA, correlação e antes e depois explicados em português","CSV direto para o R e o SAS"]],
+  ["Na equipe","Para quem coordena",["Todos no mesmo experimento, com código de convite","Alertas de animais abaixo da meta","Acesso controlado por lista de e-mails"]]];
+const LP_VS=[["Marcação","Um X na folha, de olho no relógio","Um toque, no horário certo"],["Digitação","Folha por folha, depois","Nenhuma: os dados já estão no app"],["Erro de digitação","Aparece na análise (se aparecer)","Avisado enquanto digita"],
+  ["Peso e jejum","Anotados à parte","Cada pesagem com o seu jejum"],["Resultado","Dias depois","Na hora, com explicação"]];
+function lpPorque(){
+  return`<section class="lp-sec" id="lpPor"><span class="eyebrow rv">04 · Por que usar</span><h2 class="lp-h rv">Menos papel,<br>mais pesquisa.</h2>
+    <div class="lp-por">${LP_POR.map(([t,s,L],i)=>`<div class="rv" style="--k:${i}"><span class="eyebrow">${s}</span><h3>${t}</h3><ul>${L.map(x=>`<li>${x}</li>`).join("")}</ul></div>`).join("")}</div>
+    <div class="lp-vs rv" role="table" aria-label="Papel e Etograma"><div class="lp-vs-r h" role="row"><span role="columnheader"></span><span role="columnheader">No papel</span><span role="columnheader">No Etograma</span></div>
+      ${LP_VS.map(([k,a,b])=>`<div class="lp-vs-r" role="row"><b role="rowheader">${k}</b><span role="cell">${a}</span><span role="cell" class="ok">${b}</span></div>`).join("")}</div></section>`}
 function wireLanding(){
   const page=$(".lp",app);if(!page)return;
   const nav=$("#lpNav",app),hero=$("#lpHero",app),wrap=$(".auth-wrap",hero),steps=$$(".lp-step",app),words=$$("#lpFrase span",app),time=$("#lpTime",app);
